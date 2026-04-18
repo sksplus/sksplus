@@ -199,10 +199,17 @@ function clearToken() {
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function getAccessToken() {
-  const r = await fetch(`${BASE_URL}/api/v1/dtable/app-access-token/`, {
+  // Try v2.1 endpoint first
+  let r = await fetch(`${BASE_URL}/api/v2.1/dtable/app-access-token/`, {
     headers: { Authorization: `Token ${state.token}` }
   });
-  if (!r.ok) throw new Error('Неверный токен или нет доступа к базе');
+  // Fallback to v1
+  if (!r.ok) {
+    r = await fetch(`${BASE_URL}/api/v1/dtable/app-access-token/`, {
+      headers: { Authorization: `Token ${state.token}` }
+    });
+  }
+  if (!r.ok) throw new Error(`Неверный токен или нет доступа к базе (${r.status}). Убедись что токен скопирован полностью и создан через меню базы → API Token.`);
   const d = await r.json();
   state.accessToken = d.access_token;
   state.dtableUuid = d.dtable_uuid;
