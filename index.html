@@ -189,12 +189,18 @@ let state = { token: null, accessToken: null, dtableUuid: null, apiGateway: null
 function saveToken() {
   const t = document.getElementById('token-input').value.trim();
   if (!t) return alert('Введи токен');
-  localStorage.setItem('st_api_token', t);
+  
+  try {
+    localStorage.setItem('st_api_token', t);
+  } catch (e) {
+    console.warn('Браузер блокирует сохранение, работаем без памяти');
+  }
+  
   state.token = t;
   init();
 }
-function clearToken() {
-  localStorage.removeItem('st_api_token');
+ function clearToken() {
+  try { localStorage.removeItem('st_api_token'); } catch(err) {}
   location.reload();
 }
 
