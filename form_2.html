@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Затраты</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 2rem 1rem; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); width: 100%; max-width: 520px; overflow: hidden; }
+  .card-header { background: #e87722; padding: 20px 24px; }
+  .card-header h1 { color: #fff; font-size: 22px; font-weight: 600; }
+  .card-body { padding: 24px; }
+
+  /* Form */
+  .field { margin-bottom: 20px; }
+  .field label { display: block; font-size: 14px; font-weight: 500; color: #333; margin-bottom: 6px; }
+  .field label .req { color: #e87722; margin-left: 2px; }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 15px; font-family: inherit; color: #1a1a1a; background: #fff;
+    transition: border-color 0.2s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    outline: none; border-color: #e87722; box-shadow: 0 0 0 3px rgba(232,119,34,0.12);
+  }
+  .field textarea { resize: vertical; min-height: 80px; }
+  .field select { cursor: pointer; }
+
+  button[type="submit"] {
+    width: 100%; padding: 13px; background: #e87722; color: #fff; border: none;
+    border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;
+    transition: background 0.2s;
+  }
+  button[type="submit"]:hover { background: #d06a18; }
+  button[type="submit"]:disabled { background: #ccc; cursor: not-allowed; }
+
+  /* Error */
+  .error-msg { background: #fee2e2; color: #b91c1c; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+
+  /* Receipt */
+  #receipt { display: none; }
+  .receipt-icon { text-align: center; margin-bottom: 16px; }
+  .receipt-icon .check { width: 56px; height: 56px; background: #dcfce7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
+  .receipt-icon .check svg { width: 28px; height: 28px; stroke: #15803d; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .receipt-title { text-align: center; font-size: 18px; font-weight: 600; color: #15803d; margin-bottom: 4px; }
+  .receipt-subtitle { text-align: center; font-size: 13px; color: #888; margin-bottom: 20px; }
+  .receipt-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+  .receipt-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #f0f0f0; gap: 12px; }
+  .receipt-row:last-child { border-bottom: none; }
+  .receipt-label { font-size: 13px; color: #888; flex-shrink: 0; }
+  .receipt-value { font-size: 13px; color: #1a1a1a; font-weight: 500; text-align: right; }
+  .receipt-value.amount { font-size: 18px; color: #e87722; }
+  .btn-new { width: 100%; padding: 11px; background: #fff; color: #e87722; border: 1.5px solid #e87722; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+  .btn-new:hover { background: #fff8f3; }
+
+  /* Setup */
+  #setup-screen { display: none; padding: 24px; }
+  #setup-screen p { font-size: 13px; color: #666; margin-bottom: 12px; line-height: 1.6; }
+  #setup-screen input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: monospace; margin-bottom: 12px; }
+  #setup-screen button { width: 100%; padding: 10px; background: #e87722; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
+  #setup-error { background: #fee2e2; color: #b91c1c; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-top: 10px; display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <h1>Затраты</h1>
+  </div>
+
+  <!-- Setup screen (first time) -->
+  <div id="setup-screen">
+    <p>Для работы формы нужен API-токен базы SeaTable (вводится один раз).</p>
+    <input type="password" id="token-input" placeholder="Вставь API-токен..." />
+    <button onclick="saveToken()">Подключить →</button>
+    <div id="setup-error"></div>
+  </div>
+
+  <!-- Form -->
+  <div class="card-body" id="form-screen">
+    <div class="error-msg" id="form-error"></div>
+
+    <div class="field">
+      <label>Сумма <span class="req">*</span></label>
+      <input type="number" id="f-sum" placeholder="0.00" min="0" step="0.01" />
+    </div>
+
+    <div class="field">
+      <label>Назначение платежа <span class="req">*</span></label>
+      <textarea id="f-desc" placeholder="Опишите назначение платежа..."></textarea>
+    </div>
+
+    <div class="field">
+      <label>Банк / Касса <span class="req">*</span></label>
+      <select id="f-bank">
+        <option value="">— Выберите —</option>
+        <option>Наличные Хахаев</option>
+        <option>Наличные Королев</option>
+        <option>Наличные Воскресенский</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Дата</label>
+      <input type="date" id="f-date" />
+    </div>
+
+    <button type="submit" id="submit-btn" onclick="submitForm()">Сохранить</button>
+  </div>
+
+  <!-- Receipt -->
+  <div class="card-body" id="receipt">
+    <div class="receipt-icon">
+      <div class="check">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+    </div>
+    <div class="receipt-title">Запись сохранена!</div>
+    <div class="receipt-subtitle">Данные успешно занесены в базу</div>
+    <div class="receipt-box">
+      <div class="receipt-row">
+        <span class="receipt-label">Сумма</span>
+        <span class="receipt-value amount" id="r-sum">—</span>
+      </div>
+      <div class="receipt-row">
+        <span class="receipt-label">Назначение</span>
+        <span class="receipt-value" id="r-desc">—</span>
+      </div>
+      <div class="receipt-row">
+        <span class="receipt-label">Банк / Касса</span>
+        <span class="receipt-value" id="r-bank">—</span>
+      </div>
+      <div class="receipt-row">
+        <span class="receipt-label">Дата</span>
+        <span class="receipt-value" id="r-date">—</span>
+      </div>
+    </div>
+    <button class="btn-new" onclick="resetForm()">Внести ещё одну запись</button>
+  </div>
+</div>
+
+<script>
+const BASE_URL = 'https://cloud.seatable.io';
+const DTABLE_UUID = '156393a3-b7cc-490f-bd63-82a8f0c986f0';
+const TABLE_NAME = 'ДДС';
+const ALLOWED_BANKS = ['Наличные Хахаев', 'Наличные Королев', 'Наличные Воскресенский'];
+
+let apiToken = null;
+let accessToken = null;
+let apiGateway = null;
+let bankRowIds = {}; // { 'Наличные Хахаев': 'row_id_here', ... }
+let ddsBankColKey = null; // internal key for Банк column in ДДС
+
+// Set today's date
+document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+
+function saveToken() {
+  const t = document.getElementById('token-input').value.trim();
+  if (!t) return;
+  localStorage.setItem('st_form_token', t);
+  apiToken = t;
+  initToken();
+}
+
+async function initToken() {
+  const errEl = document.getElementById('setup-error');
+  errEl.style.display = 'none';
+  try {
+    const r = await fetch(`${BASE_URL}/api/v2.1/dtable/app-access-token/`, {
+      headers: { Authorization: `Bearer ${apiToken}` }
+    });
+    if (!r.ok) throw new Error('Неверный токен (' + r.status + ')');
+    const d = await r.json();
+    accessToken = d.access_token;
+    apiGateway = d.dtable_server || `${BASE_URL}/api-gateway/`;
+    // Load metadata to find bank column key and linked table
+    await loadBankIds();
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('form-screen').style.display = 'block';
+  } catch(e) {
+    errEl.textContent = 'Ошибка: ' + e.message;
+    errEl.style.display = 'block';
+    localStorage.removeItem('st_form_token');
+  }
+}
+
+async function loadBankIds() {
+  const BANK_TABLE = 'Касса';
+
+  // Fetch rows from Касса table
+  const r = await fetch(`${apiGateway}api/v2/dtables/${DTABLE_UUID}/rows/?table_name=${encodeURIComponent(BANK_TABLE)}&limit=1000`, {
+    headers: { Authorization: `Token ${accessToken}` }
+  });
+  if (!r.ok) throw new Error('Не удалось загрузить таблицу Касса (' + r.status + ')');
+  const d = await r.json();
+  const rows = d.rows || [];
+
+  // Map name -> row_id
+  rows.forEach(row => {
+    // Name column stored as '0000' key in SeaTable API
+    const name = row['0000'] || row['Name'];
+    if (name && ALLOWED_BANKS.includes(name)) {
+      bankRowIds[name] = row._id;
+    }
+  });
+
+  if (Object.keys(bankRowIds).length === 0) {
+    // Debug: show what names we got
+    const found = rows.slice(0, 5).map(r => r['0000'] || r['Name'] || '?').join(', ');
+    throw new Error('Банки не найдены. Найдены строки: ' + found);
+  }
+}
+
+async function submitForm() {
+  const sum = document.getElementById('f-sum').value.trim();
+  const desc = document.getElementById('f-desc').value.trim();
+  const bank = document.getElementById('f-bank').value;
+  const date = document.getElementById('f-date').value;
+
+  const errEl = document.getElementById('form-error');
+  errEl.style.display = 'none';
+
+  if (!sum || parseFloat(sum) <= 0) { showErr('Укажи сумму'); return; }
+  if (!desc) { showErr('Укажи назначение платежа'); return; }
+  if (!bank) { showErr('Выбери банк / кассу'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Сохраняем...';
+
+  try {
+    // Refresh token if needed
+    if (!accessToken) await initToken();
+
+    // 1. Create row with simple fields first
+    const row = {
+      'Сумма': parseFloat(sum),
+      'Назначение платежа': desc,
+      'Дата': date ? date : new Date().toISOString().split('T')[0],
+    };
+
+    const r = await fetch(`${apiGateway}api/v2/dtables/${DTABLE_UUID}/rows/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table_name: TABLE_NAME, rows: [row] })
+    });
+
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(`Ошибка сервера (${r.status}): ${txt.substring(0, 100)}`);
+    }
+
+    const created = await r.json();
+    const newRowId = created.inserted_row_ids?.[0] || created.row?._id;
+
+    // 2. Link the bank if we have its row_id
+    const bankRowId = bankRowIds[bank];
+    if (newRowId && bankRowId && ddsBankColKey) {
+      try {
+        await fetch(`${apiGateway}api/v2/dtables/${DTABLE_UUID}/links/`, {
+          method: 'POST',
+          headers: { 'Authorization': `Token ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            table_name: TABLE_NAME,
+            column_name: 'Банк',
+            row_id: newRowId,
+            other_rows_ids: [bankRowId]
+          })
+        });
+      } catch(e) { console.warn('Bank link failed:', e); }
+    }
+
+    // Show receipt
+    document.getElementById('r-sum').textContent = parseFloat(sum).toLocaleString('ru-RU') + ' ₽';
+    document.getElementById('r-desc').textContent = desc;
+    document.getElementById('r-bank').textContent = bank;
+    document.getElementById('r-date').textContent = date
+      ? new Date(date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    document.getElementById('form-screen').style.display = 'none';
+    document.getElementById('receipt').style.display = 'block';
+
+  } catch(e) {
+    showErr(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Сохранить';
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById('form-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function resetForm() {
+  document.getElementById('f-sum').value = '';
+  document.getElementById('f-desc').value = '';
+  document.getElementById('f-bank').value = '';
+  document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('form-error').style.display = 'none';
+  document.getElementById('receipt').style.display = 'none';
+  document.getElementById('form-screen').style.display = 'block';
+}
+
+// Boot
+const saved = localStorage.getItem('st_form_token');
+if (saved) {
+  apiToken = saved;
+  document.getElementById('form-screen').style.display = 'none';
+  initToken();
+} else {
+  document.getElementById('form-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'block';
+}
+</script>
+</body>
+</html>
