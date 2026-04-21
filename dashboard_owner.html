@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Управленческий дашборд (Владельцы)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #1e293b; font-size: 14px; }
+
+  #setup { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; }
+  .setup-card { background: #fff; border-radius: 12px; padding: 2rem; max-width: 480px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+  .setup-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #0f172a; }
+  .setup-card p { color: #64748b; font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+  .setup-card input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-family: monospace; margin-bottom: 12px; }
+  .setup-card button { width: 100%; padding: 12px; background: #1e2a3a; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+  .setup-card button:hover { background: #0f172a; }
+
+  #app { display: none; min-height: 100vh; }
+  
+  .toolbar { background: #1e2a3a; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 10px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
+  .toolbar-title { color: #fff; font-size: 18px; font-weight: 600; letter-spacing: 0.02em; }
+  .toolbar-actions button { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 8px 16px; font-size: 13px; color: #fff; cursor: pointer; font-weight: 500; transition: 0.2s; margin-left: 10px;}
+  .toolbar-actions button:hover { background: rgba(255,255,255,0.2); }
+
+  .content { padding: 32px; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+  
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); overflow: hidden; border: 1px solid #e2e8f0; }
+  .card-header { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; background: #fff; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .card-title { font-size: 16px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+  
+  table { width: 100%; border-collapse: collapse; }
+  th { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; padding: 14px 24px; border-bottom: 1px solid #e2e8f0; text-align: left; font-weight: 700; background: #f8fafc; }
+  th.num { text-align: right; }
+  th.center { text-align: center; }
+  td { padding: 14px 24px; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 14px; vertical-align: middle; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  td.center { text-align: center; }
+  
+  th.divider, td.divider { border-left: 2px solid #e2e8f0; }
+  tr:hover td { background: #f8fafc; }
+  tr.grand-total td { background: #1e2a3a; color: #fff; font-weight: 700; font-size: 15px; border: none; }
+  
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .badge.pos { background: #dcfce7; color: #15803d; }
+  .badge.neg { background: #fee2e2; color: #b91c1c; }
+  .badge.neutral { background: #f1f5f9; color: #475569; }
+
+  select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; background: #fff; color: #0f172a; cursor: pointer; font-weight: 600; outline: none; }
+  select:focus { border-color: #2d7ff9; box-shadow: 0 0 0 3px rgba(45,127,249,0.1); }
+
+  #loading { display: none; position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 100; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+  .spinner { width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top-color: #1e2a3a; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 15px; color: #0f172a; font-weight: 600; }
+  
+  .sum-positive { color: #15803d; font-weight: 600; }
+  .sum-negative { color: #b91c1c; font-weight: 600; }
+
+  /* СТИЛИ ДЛЯ КАРТОЧКИ ПРОЕКТА */
+  .header-card { background: #1e2a3a; color: #fff; padding: 24px; display: flex; flex-direction: column; gap: 16px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: 20px; }
+  .header-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .header-title { font-size: 18px; font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; line-height: 1.4; color: #fff; }
+  .type-badge { font-size: 12px; background: rgba(255,255,255,0.15); padding: 5px 12px; border-radius: 6px; margin-left: 12px; font-weight: 500; letter-spacing: 0.03em; border: 1px solid rgba(255,255,255,0.2); }
+  .type-badge.warning { background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
+  
+  .kpi-blocks { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 4px; }
+  .kpi-group { background: rgba(255,255,255,0.06); padding: 16px 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); flex: 1; min-width: 300px; }
+  .kpi-group-title { font-size: 11px; color: #8bb4f7; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 14px; text-transform: uppercase; }
+  .kpi-row { display: flex; gap: 24px; justify-content: space-between; }
+  
+  .kpi { text-align: left; }
+  .kpi-label { font-size: 11px; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .kpi-val { font-size: 16px; font-weight: 600; color: #fff; white-space: nowrap; }
+  .kpi-val.good { color: #4ade80; }
+  .kpi-val.bad { color: #f87171; }
+
+  /* СТИЛИ ДЛЯ ФОРМЫ ВВОДА */
+  .form-panel { padding: 24px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+  .form-row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 150px; }
+  .field.large { flex: 2; min-width: 200px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; }
+  .field input, .field select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: #0f172a; transition: 0.2s; }
+  .field input:focus, .field select:focus { outline: none; border-color: #2d7ff9; box-shadow: 0 0 0 3px rgba(45,127,249,0.1); }
+  .btn-submit { background: #1e2a3a; color: #fff; border: none; padding: 11px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+  .btn-submit:hover { background: #0f172a; }
+  .btn-submit:disabled { background: #cbd5e1; cursor: not-allowed; }
+  .form-msg { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 16px; display: none; font-weight: 500; }
+  .form-msg.err { background: #fee2e2; color: #b91c1c; }
+  .form-msg.suc { background: #dcfce7; color: #15803d; }
+</style>
+</head>
+<body>
+
+<div id="setup">
+  <div class="setup-card">
+    <h2>Управленческий Дашборд</h2>
+    <p>Введите API-токен с доступом ко всем таблицам базы.</p>
+    <input type="password" id="token-input" placeholder="Вставьте API-токен сюда..." />
+    <button onclick="saveToken()">Войти →</button>
+    <div id="setup-error" style="display:none;margin-top:12px;padding:10px 12px;background:#fee2e2;color:#b91c1c;border-radius:8px;font-size:13px;"></div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Сбор аналитики...</div>
+</div>
+
+<div id="app">
+  <div class="toolbar">
+    <div class="toolbar-title">Дашборд Владельцев</div>
+    <div class="toolbar-actions">
+      <button onclick="init()">Обновить данные</button>
+      <button onclick="clearToken()">Сменить токен</button>
+    </div>
+  </div>
+
+  <div class="content">
+    
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🏦 Деньги в компании (Остатки на счетах и депозитах)</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Группа / Касса</th>
+            <th class="num" style="width: 250px;">Итоговая сумма</th>
+          </tr>
+        </thead>
+        <tbody id="kassa-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header" style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+        <div class="card-title">📊 Сводка по руководителям (Статусы и Финансы)</div>
+        <div style="font-size: 12px; color: #64748b; font-weight: 500;">* Финансы считаются только по проектам В работе, Закрытие и Выполнено</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="2" style="vertical-align: bottom;">Руководитель (РП)</th>
+            <th colspan="4" class="center divider" style="border-bottom: 1px solid #e2e8f0;">Количество проектов по статусам</th>
+            <th colspan="3" class="center divider" style="border-bottom: 1px solid #e2e8f0;">Финансовые показатели (по активным)</th>
+          </tr>
+          <tr>
+            <th class="center divider">Переговоры</th>
+            <th class="center">В работе</th>
+            <th class="center">Закрытие</th>
+            <th class="center">Выполнено</th>
+            <th class="num divider">Сумма договоров</th>
+            <th class="num">Приход (Факт)</th>
+            <th class="num">Рентабельность</th>
+          </tr>
+        </thead>
+        <tbody id="rp-matrix-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🎯 Детальная аналитика по проекту</div>
+        <div>
+          <select id="proj-select" onchange="renderProjectDetails()" style="min-width: 250px;">
+            <option value="">-- Выберите проект --</option>
+          </select>
+        </div>
+      </div>
+      
+      <div id="project-details-container" style="display: none;">
+        <div class="header-card">
+          <div class="header-top">
+            <div class="header-title" id="main-header-title">Аналитика бюджета проектов</div>
+          </div>
+          
+          <div class="kpi-blocks">
+            <div class="kpi-group">
+              <div class="kpi-group-title">Плановые показатели</div>
+              <div class="kpi-row">
+                <div class="kpi"><div class="kpi-label">Выручка</div><div class="kpi-val" id="kpi-p-rev">—</div></div>
+                <div class="kpi"><div class="kpi-label">Расход</div><div class="kpi-val" id="kpi-p-exp">—</div></div>
+                <div class="kpi"><div class="kpi-label">Маржа</div><div class="kpi-val" id="kpi-p-mar">—</div></div>
+              </div>
+            </div>
+
+            <div class="kpi-group">
+              <div class="kpi-group-title">Фактические показатели</div>
+              <div class="kpi-row">
+                <div class="kpi"><div class="kpi-label">Выручка</div><div class="kpi-val" id="kpi-f-rev">—</div></div>
+                <div class="kpi"><div class="kpi-label">Расход</div><div class="kpi-val" id="kpi-f-exp">—</div></div>
+                <div class="kpi"><div class="kpi-label">Маржа</div><div class="kpi-val" id="kpi-f-mar">—</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header" style="border-bottom: none;">
+        <div class="card-title">💵 Подотчетные деньги (Ввод и История)</div>
+      </div>
+      
+      <div class="form-panel">
+        <h4 style="margin-bottom: 12px; font-size: 14px; color: #0f172a;">Внести расходную операцию:</h4>
+        <div class="form-row">
+          <div class="field">
+            <label>Банк / Касса <span style="color:#b91c1c">*</span></label>
+            <select id="f-bank">
+              <option value="">— Выберите —</option>
+              <option>Наличные Хахаев</option>
+              <option>Наличные Королев</option>
+              <option>Наличные Воскресенский</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Сумма <span style="color:#b91c1c">*</span></label>
+            <input type="number" id="f-sum" placeholder="0.00" min="0" step="0.01" />
+          </div>
+          <div class="field large">
+            <label>Назначение платежа <span style="color:#b91c1c">*</span></label>
+            <input type="text" id="f-desc" placeholder="Закупка материалов, ГСМ..." />
+          </div>
+          <div class="field">
+            <label>Дата</label>
+            <input type="date" id="f-date" />
+          </div>
+          <button id="submit-btn" class="btn-submit" onclick="submitDdsForm()">Сохранить</button>
+        </div>
+        <div id="form-msg" class="form-msg"></div>
+      </div>
+
+      <div style="padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-bottom: 1px solid #e2e8f0;">
+        <h4 style="font-size: 14px; color: #475569;">История операций:</h4>
+        <select id="dds-bank-select" onchange="renderDds()">
+          <option value="Наличные Воскресенский">Наличные Воскресенский</option>
+          <option value="Наличные Хахаев">Наличные Хахаев</option>
+          <option value="Наличные Королев">Наличные Королев</option>
+        </select>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 120px;">Дата</th>
+            <th>Контрагент / Статья</th>
+            <th>Назначение платежа</th>
+            <th class="num" style="width: 180px;">Сумма</th>
+          </tr>
+        </thead>
+        <tbody id="dds-body"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// =====================================================================
+const TARGET_RPS = [
+  'Пестич Иван', 'Васин Андрей', 'Овчаров Александр', 'Ульянов Александр', 'Панченко Александр'
+];
+// =====================================================================
+
+const BASE_URL = 'https://cloud.seatable.io';
+const CONTRACT_DICT = { '559093': 'СКС ПЛЮС', '878735': 'СКС ПЛЮС', '862575': 'СИР', '145864': 'СИР Материалы' };
+
+const ARTICLES = [
+  { name: 'Приход',                 planCol: 'Сумма договора',              ddsStat: ['01 Приход', 'Приход'],                  isIncome: true },
+  { name: 'Адм. расходы',           planCol: 'Административные расходы',   ddsStat: ['02 Административные расходы'] },
+  { name: 'Материалы',              planCol: 'Материалы',                   ddsStat: ['03 Материалы'] },
+  { name: 'Субподрядчик',           planCol: 'Субпордядчик',                ddsStat: ['05 Субподрядчик'] },
+  { name: 'ЗП самозанятых',         planCol: 'ЗП Самозанятых',              ddsStat: ['06 Заработная плата', 'Самозанятые'] },
+  { name: 'ЗП монтажников',         planCol: 'ЗП Монтажников',              tabField: 'ставка_x15' }, 
+  { name: 'Транспортные расходы',   planCol: 'Транспортные расходы',        ddsStat: ['08 Транспортные расходы'] },
+  { name: 'Командировочные',        planCol: 'Командировочные расходы',     ddsStat: ['09 Командировочные расходы'],           tabField: 'суточные' },
+  { name: 'Накладные расходы',      planCol: 'Накладные расходы',           ddsStat: ['10 Накладные расходы'] },
+  { name: 'Представительские',      planCol: 'Прочие',                      ddsStat: ['12 Представительские расходы'] },
+  { name: 'НДС',                    planCol: 'НДС',                         isCalc: 'nds' }, 
+  { name: 'Налог на прибыль / УСН', planCol: 'Налог на Прибыль / УСН',     isCalc: 'tax' }
+];
+
+let state = { token: null, accessToken: null, dtableUuid: null, apiGateway: null, rows: {}, colMaps: {}, colOptionsMap: {}, bankLinkId: null };
+let bankRowIds = {}; 
+
+function parseNum(val) {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  return parseFloat(String(val).replace(/\s/g, '').replace(',', '.')) || 0;
+}
+
+function formatDate(val) {
+  if (!val) return '—';
+  if (typeof val === 'string') {
+    const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) return `${match[3]}.${match[2]}.${match[1]}`;
+    return val;
+  }
+  if (typeof val === 'number') {
+    if (val < 100000) return new Date((val - 25569) * 86400000).toLocaleDateString('ru-RU');
+    return new Date(val).toLocaleDateString('ru-RU'); 
+  }
+  return '—';
+}
+
+function fmt(n) { return Math.round(n || 0).toLocaleString('ru-RU') + ' ₽'; }
+function setLoading(s, t) { document.getElementById('loading').style.display = s ? 'flex' : 'none'; if(t) document.getElementById('loading-text').textContent = t; }
+
+async function init() {
+  setLoading(true, 'Подключение к SeaTable...');
+  try {
+    await getAccessToken();
+    await fetchMetadata();
+    
+    setLoading(true, 'Загрузка финансовых данных...');
+    state.rows.kassa = await fetchAllRowsSafe('Касса');
+    state.rows.budgets = await fetchAllRowsSafe('Бюджеты');
+    state.rows.projects = await fetchAllRowsSafe('Проекты');
+    state.rows.dds = await fetchAllRowsSafe('ДДС');
+    state.rows.tabel = await fetchAllRowsSafe('Табель и начисления');
+
+    bankRowIds = {};
+    state.rows.kassa.forEach(r => {
+        let name = r['Name'] || r['0000'] || '';
+        if (!name && r._raw_json) {
+            let raw = JSON.parse(r._raw_json);
+            name = raw['Name'] || raw['0000'] || '';
+        }
+        if (name) bankRowIds[name.trim()] = r._id;
+    });
+
+    document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+
+    setLoading(false);
+    document.getElementById('setup').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    
+    renderKassa();
+    renderRpMatrix();
+    buildProjectSelector();
+    renderDds();
+  } catch (e) {
+    setLoading(false);
+    document.getElementById('setup-error').style.display = 'block';
+    document.getElementById('setup-error').textContent = e.message;
+  }
+}
+
+async function getAccessToken() {
+  const r = await fetch(`${BASE_URL}/api/v2.1/dtable/app-access-token/`, { headers: { Authorization: `Bearer ${state.token}` } });
+  if (!r.ok) throw new Error('Ошибка токена. Проверьте правильность.');
+  const d = await r.json();
+  state.accessToken = d.access_token;
+  state.dtableUuid = d.dtable_uuid;
+  state.apiGateway = d.dtable_server || `${BASE_URL}/api-gateway/`;
+}
+
+async function fetchMetadata() {
+  const r = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/metadata/`, { headers: { Authorization: `Token ${state.accessToken}` } });
+  const d = await r.json();
+  (d.metadata.tables || []).forEach(tbl => {
+    state.colMaps[tbl.name] = {};
+    (tbl.columns || []).forEach(col => { 
+      state.colMaps[tbl.name][col.key] = col.name; 
+      if (col.data && col.data.options) {
+        if (!state.colOptionsMap[col.name]) state.colOptionsMap[col.name] = {};
+        col.data.options.forEach(opt => state.colOptionsMap[col.name][opt.id] = opt.name);
+      }
+      // Save link_id for Банк column in ДДС table
+      if (tbl.name === 'ДДС' && col.name === 'Банк' && col.data && col.data.link_id) {
+        state.bankLinkId = col.data.link_id;
+      }
+    });
+  });
+}
+
+async function fetchAllRowsSafe(tableName) {
+  try {
+    let rows = [], start = 0;
+    while (true) {
+      const r = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/rows/?table_name=${encodeURIComponent(tableName)}&start=${start}&limit=1000`, { headers: { Authorization: `Token ${state.accessToken}` } });
+      if (!r.ok) break;
+      const d = await r.json();
+      rows = rows.concat(d.rows || []);
+      if (!d.rows || d.rows.length < 1000) break;
+      start += 1000;
+    }
+    const map = state.colMaps[tableName] || {};
+    return rows.map(row => {
+      const out = { _id: row._id, _raw_json: JSON.stringify(row) }; 
+      Object.keys(row).forEach(k => {
+        if (k === '_id') return;
+        let val = row[k], colName = map[k] || k;
+        if (Array.isArray(val)) {
+          if (val.length > 0 && val[0] && typeof val[0] === 'object' && val[0].display_value) val = val.map(v => v.display_value).join(', ');
+          else if (val.length === 0) val = '';
+          else val = state.colOptionsMap[colName] ? val.map(v => state.colOptionsMap[colName][v] || v).join(', ') : val.join(', ');
+        } else if (typeof val === 'string' && state.colOptionsMap[colName] && state.colOptionsMap[colName][val]) {
+          val = state.colOptionsMap[colName][val];
+        } else if (val && typeof val === 'object' && val.text) val = val.text;
+        out[colName] = val;
+      });
+      return out;
+    });
+  } catch (e) { return []; }
+}
+
+
+function renderKassa() {
+  const tbody = document.getElementById('kassa-body');
+  
+  let sksSum = 0;
+  let sirSum = 0;
+  let cashAccounts = [];
+  let grandTotal = 0;
+
+  state.rows.kassa.forEach(r => {
+      let name = String(r['Name'] || '').trim();
+      let upperName = name.toUpperCase();
+
+      if (!name || upperName.includes('ППР') || upperName.includes('СОТРУДНИКИ')) return;
+
+      let ost = parseNum(r['Остаток на счёте']);
+      let dep = parseNum(r['На депозите']);
+      let rowTotal = ost + dep;
+
+      if (upperName.includes('СКС')) {
+          sksSum += rowTotal;
+          grandTotal += rowTotal;
+      } else if (upperName.includes('СИР')) {
+          sirSum += rowTotal;
+          grandTotal += rowTotal;
+      } else if (upperName.includes('НАЛИЧНЫЕ') || upperName.includes('СЕЙФ')) {
+          cashAccounts.push({ name: name, sum: rowTotal });
+          grandTotal += rowTotal;
+      }
+  });
+
+  let html = `<tr>
+     <td style="font-weight: 600; font-size: 15px; color: #0f172a;">🏦 Группа компаний: СКС ПЛЮС</td>
+     <td class="num" style="font-size: 15px; font-weight: 600;">${fmt(sksSum)}</td>
+  </tr><tr>
+     <td style="font-weight: 600; font-size: 15px; color: #0f172a;">🏦 Группа компаний: СИР</td>
+     <td class="num" style="font-size: 15px; font-weight: 600;">${fmt(sirSum)}</td>
+  </tr>`;
+
+  cashAccounts.sort((a,b) => b.sum - a.sum).forEach(c => {
+     html += `<tr>
+       <td style="font-weight: 500; padding-left: 32px; color: #475569;">💵 ${c.name}</td>
+       <td class="num" style="font-size: 14px;">${fmt(c.sum)}</td>
+     </tr>`;
+  });
+
+  html += `<tr class="grand-total">
+    <td style="text-align: right; text-transform: uppercase;">Итого свободных средств:</td>
+    <td class="num">${fmt(grandTotal)}</td>
+  </tr>`;
+
+  tbody.innerHTML = html;
+}
+
+function getProjName(r) {
+  let n = r['Название'] || r['Название проекта'] || r['Name'] || r['Проект'] || r['Наименование'];
+  let c = r['Код проекта'];
+  n = String(n || '').trim(); c = String(c || '').trim();
+  if (!n || n === 'undefined') n = c; if (!n || n === 'undefined') n = 'Без названия';
+  return n;
+}
+
+function getProjCode(r) {
+  if (!r) return '';
+  let n = r['Название'] || r['Название проекта'] || r['Name'] || r['Проект'] || r['Наименование'];
+  n = String(n || '').trim();
+  let c = String(r['Код проекта'] || '').trim();
+  if (c === 'undefined') c = '';
+  if (!n || n === 'undefined') return ''; 
+  if (n === c) return ''; 
+  return c;
+}
+
+function getContractInfo(budget) {
+  if (!budget || Object.keys(budget).length === 0) return { code: 'NONE', displayName: 'НЕ УКАЗАН' };
+  const rawJson = budget._raw_json || JSON.stringify(budget);
+  for (const [id, name] of Object.entries(CONTRACT_DICT)) {
+    if (rawJson.includes(`"${id}"`)) return { code: (id === '145864' ? 'SIR_MAT' : (id === '862575' ? 'SIR' : 'SKS')), displayName: name };
+  }
+  let textVal = String(budget['Тип договора'] || '').toUpperCase().replace(/\s+/g, '').replace(/C/g, 'С').replace(/K/g, 'К').replace(/P/g, 'Р').replace(/A/g, 'А');
+  if (textVal.includes('СИРМАТ') || textVal.includes('SIR_MAT')) return { code: 'SIR_MAT', displayName: 'СИР Материалы' };
+  if (textVal.includes('СИР') || textVal.includes('SIR')) return { code: 'SIR', displayName: 'СИР' };
+  return { code: 'SKS', displayName: 'СКС ПЛЮС' };
+}
+
+function getFinancialsForProject(budget, projRecord) {
+  const contractInfo = getContractInfo(budget);
+  const projCodeText = getProjName(budget).toLowerCase();
+  const budgetId = String(budget._id || '').toLowerCase();
+  
+  let pRev = 0, pExp = 0;
+  
+  ARTICLES.forEach(art => {
+      let factTotal = 0;
+      
+      if (!art.isCalc && art.ddsStat) {
+          const searchStats = art.ddsStat.map(s => s.toLowerCase().trim());
+          let sum = state.rows.dds.filter(r => {
+             const rowProjLink = String(r['Код проекта'] || r['Проект'] || '').toLowerCase();
+             const statMatch = searchStats.some(s => String(r['Статья бюджета']||'').toLowerCase().includes(s));
+             return (budgetId && rowProjLink.includes(budgetId) || projCodeText.length > 1 && rowProjLink.includes(projCodeText)) && statMatch;
+          }).reduce((s, r) => s + parseNum(r['Сумма']), 0);
+          factTotal += art.isIncome ? Math.abs(sum) : sum;
+      }
+      
+      if (!art.isCalc && art.tabField) {
+          let sum = state.rows.tabel.filter(r => {
+             const rowProjLink = String(r['Проект'] || r['Код проекта'] || '').toLowerCase();
+             return (budgetId && rowProjLink.includes(budgetId)) || (projCodeText.length > 1 && rowProjLink.includes(projCodeText));
+          }).reduce((s, r) => {
+             if (art.tabField === 'суточные') return s + parseNum(r['Итого суточные']);
+             if (art.tabField === 'ставка_x15') return s + parseNum(r['Итого ставка']) + parseNum(r['Итого бригадирские']);
+             return s;
+          }, 0);
+          if (art.tabField === 'ставка_x15') sum *= 1.5;
+          factTotal += sum;
+      }
+
+      if (art.isCalc) {
+          let cType = contractInfo.code;
+          let prihod = pRev; 
+          if (art.isCalc === 'nds') {
+              factTotal = (cType === 'SIR_MAT' || cType === 'SIR') ? prihod / 1.22 * 0.22 : prihod / 1.05 * 0.05;
+          } else if (art.isCalc === 'tax') {
+              factTotal = (cType === 'SIR' || cType === 'SIR_MAT') ? prihod * 0.15 : prihod * 0.06; 
+          }
+      }
+
+      if (art.isIncome) pRev += factTotal; else pExp += factTotal;
+  });
+
+  let valContract = projRecord['Сумма договора'];
+  if (valContract === undefined || valContract === null || valContract === '') {
+      valContract = budget['Сумма договора'];
+  }
+  
+  return { contractSum: parseNum(valContract), rev: pRev, exp: pExp, profit: pRev - pExp };
+}
+
+function renderRpMatrix() {
+  const tbody = document.getElementById('rp-matrix-body');
+  
+  let unifiedProjects = [];
+  state.rows.projects.forEach(p => {
+     const name = getProjName(p);
+     if (name.toUpperCase().includes('RFI')) return; 
+     unifiedProjects.push({ proj: p, budget: state.rows.budgets.find(b => getProjName(b) === name) || {}, name });
+  });
+
+  let matrixData = {};
+  TARGET_RPS.forEach(rp => {
+      matrixData[rp] = { cntNego: 0, cntWork: 0, cntClose: 0, cntDone: 0, finContract: 0, finRev: 0, finProfit: 0 };
+  });
+
+  let grand = { cntNego: 0, cntWork: 0, cntClose: 0, cntDone: 0, finContract: 0, finRev: 0, finProfit: 0 };
+
+  unifiedProjects.forEach(item => {
+     const b = item.budget; const p = item.proj;
+     const rpVal = String(b['Ответственный'] || p['Ответственный'] || p['Руководитель проекта'] || p['РП'] || '').trim();
+     
+     let matchedRp = null;
+     for (let rp of TARGET_RPS) { if (rpVal.includes(rp) || rpVal === rp) { matchedRp = rp; break; } }
+     if (!matchedRp) return;
+
+     let status = String(b['Статус'] || b['Status'] || p['Статус'] || p['Status'] || '').toLowerCase();
+     let isTender = item.name.toLowerCase().includes('конкурс') || status.includes('конкурс');
+     let isFinActive = false;
+
+     if (status.includes('4') || status.includes('переговор') || isTender) {
+         matrixData[matchedRp].cntNego++; grand.cntNego++;
+     } else if (status.includes('1.') || status.startsWith('1') || status.includes('закрывающ') || status.includes('ждем')) {
+         matrixData[matchedRp].cntClose++; grand.cntClose++; isFinActive = true;
+     } else if (status.includes('5') || status.includes('выполн')) {
+         matrixData[matchedRp].cntDone++; grand.cntDone++; isFinActive = true;
+     } else if (status.includes('3') || status.includes('работ')) {
+         matrixData[matchedRp].cntWork++; grand.cntWork++; isFinActive = true;
+     }
+
+     if (isFinActive) {
+         let fins = getFinancialsForProject(b, p);
+         matrixData[matchedRp].finContract += fins.contractSum;
+         matrixData[matchedRp].finRev += fins.rev;
+         matrixData[matchedRp].finProfit += fins.profit;
+         grand.finContract += fins.contractSum; grand.finRev += fins.rev; grand.finProfit += fins.profit;
+     }
+  });
+
+  let html = '';
+  TARGET_RPS.forEach(rp => {
+     let d = matrixData[rp];
+     let margin = d.finRev > 0 ? Math.round((d.finProfit / d.finRev) * 100) : 0;
+     let marginBadge = margin >= 20 ? 'pos' : (margin < 0 ? 'neg' : 'neutral');
+     
+     html += `<tr>
+        <td style="font-weight: 600;">${rp}</td>
+        <td class="center divider" style="color:#94a3b8;">${d.cntNego || '—'}</td>
+        <td class="center" style="color:#2d7ff9; font-weight:600;">${d.cntWork || '—'}</td>
+        <td class="center" style="color:#f59e0b; font-weight:600;">${d.cntClose || '—'}</td>
+        <td class="center" style="color:#10b981; font-weight:600;">${d.cntDone || '—'}</td>
+        <td class="num divider">${fmt(d.finContract)}</td>
+        <td class="num" style="color:#15803d;">${fmt(d.finRev)}</td>
+        <td class="num"><span class="badge ${marginBadge}">${margin}%</span></td>
+     </tr>`;
+  });
+
+  let grandMargin = grand.finRev > 0 ? Math.round((grand.finProfit / grand.finRev) * 100) : 0;
+  html += `<tr class="grand-total">
+     <td style="text-align: right;">ВСЕГО:</td>
+     <td class="center divider">${grand.cntNego}</td>
+     <td class="center">${grand.cntWork}</td>
+     <td class="center">${grand.cntClose}</td>
+     <td class="center">${grand.cntDone}</td>
+     <td class="num divider">${fmt(grand.finContract)}</td>
+     <td class="num">${fmt(grand.finRev)}</td>
+     <td class="num">${grandMargin}%</td>
+  </tr>`;
+
+  tbody.innerHTML = html;
+}
+
+function buildProjectSelector() {
+  const projsFromBudgets = state.rows.budgets.map(r => getProjName(r));
+  const projsFromProjects = state.rows.projects.map(r => getProjName(r));
+  const projs = [...new Set([...projsFromBudgets, ...projsFromProjects])]
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b, 'ru', { numeric: true, sensitivity: 'base' }));
+  
+  const select = document.getElementById('proj-select');
+  select.innerHTML = '<option value="">-- Выберите проект --</option>' + projs.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+function renderProjectDetails() {
+  const projName = document.getElementById('proj-select').value;
+  const container = document.getElementById('project-details-container');
+  
+  if (!projName) { container.style.display = 'none'; return; }
+  container.style.display = 'block';
+
+  const budget = state.rows.budgets.find(r => getProjName(r) === projName) || {};
+  const pRecord = state.rows.projects.find(p => getProjName(p) === projName) || {};
+  const mockBudget = Object.keys(budget).length > 0 ? budget : { 'Название': projName, 'Код проекта': pRecord['Код проекта'] || '' };
+
+  const contractInfo = getContractInfo(budget);
+  const codeText = getProjCode(mockBudget);
+  const codeDisplay = codeText ? ` (Код: ${codeText})` : '';
+  const noBudgetBadge = Object.keys(budget).length === 0 ? ' <span class="badge no-budget" style="background:#fef08a;color:#854d0e;">Нет бюджета</span>' : '';
+  
+  document.getElementById('main-header-title').innerHTML = `Проект: ${projName}${codeDisplay}${noBudgetBadge} <span class="type-badge">Договор: ${contractInfo.displayName}</span>`;
+
+  let pRev = 0, pExp = 0, fRev = 0, fExp = 0;
+
+  ARTICLES.forEach(art => {
+    let planSumVal = budget[art.planCol];
+    if (art.planCol === 'Сумма договора') {
+        let valFromProj = pRecord['Сумма договора'];
+        if (valFromProj !== undefined && valFromProj !== null && valFromProj !== '') planSumVal = valFromProj;
+    }
+    const plan = parseNum(planSumVal);
+    
+    let factTotal = 0;
+    const projCodeText = getProjName(mockBudget).toLowerCase();
+    const budgetId = String(mockBudget._id || '').toLowerCase();
+
+    if (!art.isCalc && art.ddsStat) {
+        const searchStats = art.ddsStat.map(s => s.toLowerCase().trim());
+        let sum = state.rows.dds.filter(r => {
+           const rowProjLink = String(r['Код проекта'] || r['Проект'] || '').toLowerCase();
+           const statMatch = searchStats.some(s => String(r['Статья бюджета']||'').toLowerCase().includes(s));
+           return (budgetId && rowProjLink.includes(budgetId) || projCodeText.length > 1 && rowProjLink.includes(projCodeText)) && statMatch;
+        }).reduce((s, r) => s + parseNum(r['Сумма']), 0);
+        factTotal += art.isIncome ? Math.abs(sum) : sum;
+    }
+    if (!art.isCalc && art.tabField) {
+        let sum = state.rows.tabel.filter(r => {
+           const rowProjLink = String(r['Проект'] || r['Код проекта'] || '').toLowerCase();
+           return (budgetId && rowProjLink.includes(budgetId)) || (projCodeText.length > 1 && rowProjLink.includes(projCodeText));
+        }).reduce((s, r) => {
+           if (art.tabField === 'суточные') return s + parseNum(r['Итого суточные']);
+           if (art.tabField === 'ставка_x15') return s + parseNum(r['Итого ставка']) + parseNum(r['Итого бригадирские']);
+           return s;
+        }, 0);
+        if (art.tabField === 'ставка_x15') sum *= 1.5;
+        factTotal += sum;
+    }
+    if (art.isCalc) {
+        let cType = contractInfo.code;
+        if (cType === 'NONE') factTotal = 0;
+        else {
+            let prihodFact = fRev; 
+            if (art.isCalc === 'nds') {
+                factTotal = (cType === 'SIR_MAT' || cType === 'SIR') ? prihodFact / 1.22 * 0.22 : prihodFact / 1.05 * 0.05;
+            } else if (art.isCalc === 'tax') {
+                factTotal = (cType === 'SIR' || cType === 'SIR_MAT') ? prihodFact * 0.15 : prihodFact * 0.06; 
+            }
+        }
+    }
+
+    if (art.isIncome) { pRev += plan; fRev += factTotal; } else { pExp += plan; fExp += factTotal; }
+  });
+
+  const pMarRub = pRev - pExp; const pMarPct = pRev > 0 ? Math.round(pMarRub / pRev * 100) : 0;
+  document.getElementById('kpi-p-rev').textContent = fmt(pRev);
+  document.getElementById('kpi-p-exp').textContent = fmt(pExp);
+  const pMarEl = document.getElementById('kpi-p-mar'); pMarEl.textContent = `${fmt(pMarRub)} (${pMarPct}%)`;
+  pMarEl.className = 'kpi-val ' + (pMarPct >= 20 ? 'good' : (pMarPct < 0 ? 'bad' : ''));
+
+  const fMarRub = fRev - fExp; const fMarPct = fRev > 0 ? Math.round(fMarRub / fRev * 100) : 0;
+  document.getElementById('kpi-f-rev').textContent = fmt(fRev);
+  document.getElementById('kpi-f-exp').textContent = fmt(fExp);
+  const fMarEl = document.getElementById('kpi-f-mar'); fMarEl.textContent = `${fmt(fMarRub)} (${fMarPct}%)`;
+  fMarEl.className = 'kpi-val ' + (fMarPct >= 20 ? 'good' : (fMarPct < 0 ? 'bad' : ''));
+}
+
+
+// === ОТПРАВКА ДАННЫХ В ДДС И ПРИВЯЗКА К КАССЕ ===
+async function submitDdsForm() {
+  const sumVal = document.getElementById('f-sum').value.trim();
+  const desc = document.getElementById('f-desc').value.trim();
+  const bank = document.getElementById('f-bank').value;
+  const date = document.getElementById('f-date').value;
+  const msgEl = document.getElementById('form-msg');
+  
+  msgEl.style.display = 'none';
+  msgEl.className = 'form-msg err';
+
+  if (!bank) { msgEl.textContent = 'Ошибка: Выберите кассу'; msgEl.style.display = 'block'; return; }
+  if (!sumVal || parseFloat(sumVal) <= 0) { msgEl.textContent = 'Ошибка: Введите корректную сумму'; msgEl.style.display = 'block'; return; }
+  if (!desc) { msgEl.textContent = 'Ошибка: Заполните назначение платежа'; msgEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Загрузка...';
+
+  try {
+    // В базе SeaTable плюс = Расход
+    let finalSum = Math.abs(parseFloat(sumVal));
+
+    const row = {
+      'Сумма': finalSum,
+      'Назначение платежа': desc,
+      'Дата': date ? date : new Date().toISOString().split('T')[0],
+    };
+
+    // 1. Добавляем строку в ДДС
+    const r = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/rows/`, {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table_name: 'ДДС', rows: [row] })
+    });
+
+    if (!r.ok) throw new Error(`Ошибка сервера (${r.status}) при добавлении строки`);
+    
+    const created = await r.json();
+    const newRowId = created.inserted_row_ids ? created.inserted_row_ids[0] : (created.row ? created.row._id : null);
+
+    // 2. Жесткая привязка через API ссылок SeaTable
+    const bankRowId = bankRowIds[bank];
+    if (newRowId && bankRowId) {
+      try {
+        const linkBody = {
+            table_name: 'ДДС',
+            other_table_name: 'Касса',
+            row_id: newRowId,
+            other_rows_ids: [bankRowId]
+          };
+          if (state.bankLinkId) linkBody.link_id = state.bankLinkId;
+          const linkRes = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/links/`, {
+          method: 'POST',
+          headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(linkBody)
+        });
+        
+        const linkTxt = await linkRes.text();
+        console.log('Link response status:', linkRes.status);
+        console.log('Link response body:', linkTxt);
+        console.log('Link body sent:', JSON.stringify(linkBody));
+        if (!linkRes.ok) {
+            throw new Error('Link API ' + linkRes.status + ': ' + linkTxt);
+        }
+      } catch(e) { 
+          throw new Error('Строка создана, но привязка к кассе не удалась: ' + e.message); 
+      }
+    }
+
+    // Успех! Очищаем форму
+    document.getElementById('f-sum').value = '';
+    document.getElementById('f-desc').value = '';
+    msgEl.className = 'form-msg suc';
+    msgEl.textContent = '✅ Расход успешно добавлен в базу и списан с кассы!';
+    msgEl.style.display = 'block';
+    
+    // Переключаем селект таблицы истории на ту кассу, куда только что добавили
+    document.getElementById('dds-bank-select').value = bank;
+
+    // Обновляем данные на странице
+    btn.textContent = 'Обновление данных...';
+    state.rows.kassa = await fetchAllRowsSafe('Касса');
+    state.rows.dds = await fetchAllRowsSafe('ДДС');
+    
+    renderKassa();
+    renderDds();
+    setTimeout(() => { msgEl.style.display = 'none'; }, 5000);
+
+  } catch(e) {
+    msgEl.textContent = 'Ошибка сохранения: ' + e.message;
+    msgEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Сохранить';
+  }
+}
+
+// Отрисовка детализации истории
+function renderDds() {
+  const bankName = document.getElementById('dds-bank-select').value.toLowerCase().trim();
+  const tbody = document.getElementById('dds-body');
+  
+  let rows = state.rows.dds.filter(r => {
+      return String(r['Банк'] || '').toLowerCase().trim() === bankName;
+  });
+  
+  rows.sort((a, b) => {
+      let d1 = new Date(a['Дата'] || 0).getTime();
+      let d2 = new Date(b['Дата'] || 0).getTime();
+      return d2 - d1;
+  });
+
+  let html = '';
+  rows.forEach(r => {
+      let dateStr = formatDate(r['Дата']);
+      let agent = r['Контрагент'] || r['Статья бюджета'] || '—';
+      let purpose = r['Назначение платежа'] || '—';
+      
+      let rawSum = r['Сумма'];
+      let sumNum = parseNum(rawSum);
+      
+      // Логика базы: минус = приход, плюс = расход
+      let isIncome = sumNum < 0; 
+      
+      // Для отображения в дашборде:
+      // Приход будет зеленым (+ сумма), Расход будет красным (- сумма)
+      let sumClass = isIncome ? 'sum-positive' : 'sum-negative';
+      let sumPrefix = isIncome ? '+ ' : '- ';
+
+      html += `<tr>
+        <td style="color:#64748b; font-size:13px;">${dateStr}</td>
+        <td style="font-weight:500;">${agent}</td>
+        <td style="color:#475569; font-size:13px;">${purpose}</td>
+        <td class="num ${sumClass}">${sumPrefix}${fmt(Math.abs(sumNum))}</td>
+      </tr>`;
+  });
+
+  if (rows.length === 0) {
+      html = `<tr><td colspan="4" style="text-align:center; padding: 32px; color:#94a3b8;">По выбранной кассе операций не найдено</td></tr>`;
+  }
+
+  tbody.innerHTML = html;
+}
+
+function saveToken() { 
+  state.token = document.getElementById('token-input').value.trim(); 
+  localStorage.setItem('st_owner_token', state.token); 
+  init(); 
+}
+
+function clearToken() { 
+  localStorage.removeItem('st_owner_token'); 
+  location.reload(); 
+}
+
+const saved = localStorage.getItem('st_owner_token');
+if (saved) { 
+  state.token = saved; 
+  document.getElementById('setup').style.display = 'none'; 
+  init(); 
+}
+</script>
+</body>
+</html>
