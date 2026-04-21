@@ -761,6 +761,9 @@ async function submitDdsForm() {
     
     const created = await r.json();
     const newRowId = created.inserted_row_ids ? created.inserted_row_ids[0] : (created.row ? created.row._id : null);
+    console.log('Created row response:', JSON.stringify(created));
+    console.log('newRowId:', newRowId, '| bank:', bank, '| bankRowIds:', JSON.stringify(bankRowIds));
+    console.log('state.bankLinkId:', state.bankLinkId);
 
     // 2. Жесткая привязка через API ссылок SeaTable
     const bankRowId = bankRowIds[bank];
