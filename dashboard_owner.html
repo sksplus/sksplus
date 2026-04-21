@@ -760,7 +760,7 @@ async function submitDdsForm() {
     if (!r.ok) throw new Error(`Ошибка сервера (${r.status}) при добавлении строки`);
     
     const created = await r.json();
-    const newRowId = created.inserted_row_ids ? created.inserted_row_ids[0] : (created.row ? created.row._id : null);
+    const newRowId = (created.row_ids && created.row_ids[0]) ? created.row_ids[0]._id : (created.inserted_row_ids ? created.inserted_row_ids[0] : (created.row ? created.row._id : null));
     console.log('Created row response:', JSON.stringify(created));
     console.log('newRowId:', newRowId, '| bank:', bank, '| bankRowIds:', JSON.stringify(bankRowIds));
     console.log('state.bankLinkId:', state.bankLinkId);
