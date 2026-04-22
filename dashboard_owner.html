@@ -282,7 +282,7 @@ const ARTICLES = [
   { name: 'Налог на прибыль / УСН', planCol: 'Налог на Прибыль / УСН',     isCalc: 'tax' }
 ];
 
-let state = { token: null, accessToken: null, dtableUuid: null, apiGateway: null, rows: {}, colMaps: {}, colOptionsMap: {}, bankLinkId: null };
+let state = { token: null, accessToken: null, dtableUuid: null, apiGateway: null, rows: {}, colMaps: {}, colOptionsMap: {}, bankLinkId: null, bankTableId: null, bankOtherTableId: null, tableIdMap: {} };
 let bankRowIds = {}; 
 
 function parseNum(val) {
@@ -361,6 +361,7 @@ async function fetchMetadata() {
   const r = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/metadata/`, { headers: { Authorization: `Token ${state.accessToken}` } });
   const d = await r.json();
   (d.metadata.tables || []).forEach(tbl => {
+    state.tableIdMap[tbl._id] = tbl.name;
     state.colMaps[tbl.name] = {};
     (tbl.columns || []).forEach(col => { 
       state.colMaps[tbl.name][col.key] = col.name; 
@@ -368,9 +369,11 @@ async function fetchMetadata() {
         if (!state.colOptionsMap[col.name]) state.colOptionsMap[col.name] = {};
         col.data.options.forEach(opt => state.colOptionsMap[col.name][opt.id] = opt.name);
       }
-      // Save link_id for Банк column in ДДС table
-      if (tbl.name === 'ДДС' && col.name === 'Банк' && col.data && col.data.link_id) {
+      // Save link info for Банк column in ДДС table
+      if (tbl.name === 'ДДС' && col.name === 'Банк' && col.data) {
         state.bankLinkId = col.data.link_id;
+        state.bankTableId = col.data.table_id;
+        state.bankOtherTableId = col.data.other_table_id;
       }
     });
   });
@@ -761,35 +764,29 @@ async function submitDdsForm() {
     
     const created = await r.json();
     const newRowId = (created.row_ids && created.row_ids[0]) ? created.row_ids[0]._id : (created.inserted_row_ids ? created.inserted_row_ids[0] : (created.row ? created.row._id : null));
-    console.log('Created row response:', JSON.stringify(created));
-    console.log('newRowId:', newRowId, '| bank:', bank, '| bankRowIds:', JSON.stringify(bankRowIds));
-    console.log('state.bankLinkId:', state.bankLinkId);
 
     // 2. Жесткая привязка через API ссылок SeaTable
     const bankRowId = bankRowIds[bank];
     if (newRowId && bankRowId) {
       try {
+        await new Promise(res => setTimeout(res, 500));
+        // Use correct API format with table_id and other_rows_ids_map
         const linkBody = {
-            table_name: 'ДДС',
-            other_table_name: 'Касса',
-            row_id: newRowId,
-            other_rows_ids: [bankRowId]
-          };
-          if (state.bankLinkId) linkBody.link_id = state.bankLinkId;
-          const linkRes = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/links/`, {
+          table_id: state.bankTableId,
+          other_table_id: state.bankOtherTableId,
+          link_id: state.bankLinkId,
+          other_rows_ids_map: { [newRowId]: [bankRowId] }
+        };
+        console.log('Link body:', JSON.stringify(linkBody));
+        const linkRes = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/links/`, {
           method: 'POST',
           headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(linkBody)
         });
-        
         const linkTxt = await linkRes.text();
-        console.log('Link response status:', linkRes.status);
-        console.log('Link response body:', linkTxt);
-        console.log('Link body sent:', JSON.stringify(linkBody));
-        if (!linkRes.ok) {
-            throw new Error('Link API ' + linkRes.status + ': ' + linkTxt);
-        }
-      } catch(e) { 
+        console.log('Link response:', linkRes.status, linkTxt);
+        if (!linkRes.ok) throw new Error('Link API ' + linkRes.status + ': ' + linkTxt);
+      } catch(e) {
           throw new Error('Строка создана, но привязка к кассе не удалась: ' + e.message); 
       }
     }
