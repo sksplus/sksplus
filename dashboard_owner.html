@@ -137,22 +137,26 @@
     <div class="card">
       <div class="card-header" style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
         <div class="card-title">📊 Сводка по руководителям (Статусы и Финансы)</div>
-        <div style="font-size: 12px; color: #64748b; font-weight: 500;">* Финансы считаются только по проектам В работе, Закрытие и Выполнено</div>
+        <div style="font-size: 12px; color: #64748b; font-weight: 500;">* Финансы: В работе + Закрытие + Выполнено (без Рамочных, без RFI)</div>
       </div>
       <table>
         <thead>
           <tr>
             <th rowspan="2" style="vertical-align: bottom;">Руководитель (РП)</th>
-            <th colspan="4" class="center divider" style="border-bottom: 1px solid #e2e8f0;">Количество проектов по статусам</th>
-            <th colspan="3" class="center divider" style="border-bottom: 1px solid #e2e8f0;">Финансовые показатели (по активным)</th>
+            <th colspan="7" class="center divider" style="border-bottom: 1px solid #e2e8f0;">Количество проектов по статусам</th>
+            <th colspan="4" class="center divider" style="border-bottom: 1px solid #e2e8f0;">Финансовые показатели</th>
           </tr>
           <tr>
-            <th class="center divider">Переговоры</th>
-            <th class="center">В работе</th>
-            <th class="center">Закрытие</th>
-            <th class="center">Выполнено</th>
+            <th class="center divider" style="width:30px;padding:8px 2px;font-size:10px;">?</th>
+            <th class="center" style="width:35px;padding:8px 2px;font-size:10px;">Перег.</th>
+            <th class="center" style="width:35px;padding:8px 2px;font-size:10px;">Работа</th>
+            <th class="center" style="width:35px;padding:8px 2px;font-size:10px;">Закр.</th>
+            <th class="center" style="width:35px;padding:8px 2px;font-size:10px;">Вып.</th>
+            <th class="center" style="width:35px;padding:8px 2px;font-size:10px;">Зав.</th>
+            <th class="center" style="width:35px;padding:8px 2px;font-size:10px;font-weight:700;">Всего</th>
             <th class="num divider">Сумма договоров</th>
             <th class="num">Приход (Факт)</th>
+            <th class="num">Расход (Факт)</th>
             <th class="num">Рентабельность</th>
           </tr>
         </thead>
@@ -497,53 +501,96 @@ function getContractInfo(budget) {
 
 function getFinancialsForProject(budget, projRecord) {
   const contractInfo = getContractInfo(budget);
-  const projCodeText = getProjName(budget).toLowerCase();
+  const cType = contractInfo.code;
+  
+  // Use both budget and project data for matching
+  const bName = getProjName(budget).toLowerCase().trim();
+  const bCode = getProjCode(budget).toLowerCase().trim();
+  const pName = getProjName(projRecord || {}).toLowerCase().trim();
+  const pCode = getProjCode(projRecord || {}).toLowerCase().trim();
   const budgetId = String(budget._id || '').toLowerCase();
+  const projectId = String((projRecord || {})._id || '').toLowerCase();
   
+  const names = [...new Set([bName, pName].filter(n => n && n.length > 1 && n !== 'без названия'))];
+  const codes = [...new Set([bCode, pCode].filter(c => c && c.length > 1))];
+  const ids = [...new Set([budgetId, projectId].filter(Boolean))];
+  
+  function matchProject(rowProjRaw) {
+    const parts = rowProjRaw.toLowerCase().trim().split(',').map(s => s.trim());
+    return ids.some(id => parts.some(p => p === id)) ||
+           codes.some(code => parts.some(p => p === code)) ||
+           names.some(name => parts.some(p => p === name));
+  }
+  
+  function getDdsForStat(ddsStats, isIncome) {
+    if (!ddsStats || !ddsStats.length) return { total: 0, rows: [] };
+    const searchStats = ddsStats.map(s => s.toLowerCase().trim());
+    const rows = state.rows.dds.filter(r => {
+      if (!matchProject(String(r['Код проекта'] || r['Проект'] || ''))) return false;
+      const rowStat = String(r['Статья бюджета'] || '').toLowerCase().trim();
+      const statMatch = searchStats.some(s => rowStat === s || rowStat.includes(s));
+      if (isIncome) return statMatch;
+      return statMatch;
+    });
+    return { total: rows.reduce((s, r) => s + parseNum(r['Сумма']), 0), rows };
+  }
+  
+  function getTabelForField(field) {
+    const rows = state.rows.tabel.filter(r => matchProject(String(r['Проект'] || r['Код проекта'] || '')));
+    let total = 0;
+    if (field === 'суточные') total = rows.reduce((s, r) => s + parseNum(r['Итого суточные']), 0);
+    if (field === 'ставка_x15') total = rows.reduce((s, r) => s + parseNum(r['Итого ставка']) + parseNum(r['Итого бригадирские']), 0) * 1.5;
+    return { total, rows };
+  }
+
   let pRev = 0, pExp = 0;
-  
+
   ARTICLES.forEach(art => {
-      let factTotal = 0;
-      
-      if (!art.isCalc && art.ddsStat) {
-          const searchStats = art.ddsStat.map(s => s.toLowerCase().trim());
-          let sum = state.rows.dds.filter(r => {
-             const rowProjLink = String(r['Код проекта'] || r['Проект'] || '').toLowerCase();
-             const statMatch = searchStats.some(s => String(r['Статья бюджета']||'').toLowerCase().includes(s));
-             return (budgetId && rowProjLink.includes(budgetId) || projCodeText.length > 1 && rowProjLink.includes(projCodeText)) && statMatch;
-          }).reduce((s, r) => s + parseNum(r['Сумма']), 0);
-          factTotal += art.isIncome ? Math.abs(sum) : sum;
-      }
-      
-      if (!art.isCalc && art.tabField) {
-          let sum = state.rows.tabel.filter(r => {
-             const rowProjLink = String(r['Проект'] || r['Код проекта'] || '').toLowerCase();
-             return (budgetId && rowProjLink.includes(budgetId)) || (projCodeText.length > 1 && rowProjLink.includes(projCodeText));
-          }).reduce((s, r) => {
-             if (art.tabField === 'суточные') return s + parseNum(r['Итого суточные']);
-             if (art.tabField === 'ставка_x15') return s + parseNum(r['Итого ставка']) + parseNum(r['Итого бригадирские']);
-             return s;
+    let factTotal = 0;
+
+    if (art.isCalc) {
+      const prihodFact = Math.abs(getDdsForStat(['01 Приход', 'Приход'], true).total);
+      const matFact = Math.abs(getDdsForStat(['03 Материалы']).total);
+      const transFact = Math.abs(getDdsForStat(['08 Транспортные расходы']).total);
+
+      if (art.isCalc === 'nds') {
+        if (cType === 'SIR_MAT') factTotal = Math.max(0, prihodFact - matFact - transFact) / 1.22 * 0.22;
+        else if (cType === 'SIR') factTotal = prihodFact / 1.22 * 0.22;
+        else factTotal = prihodFact / 1.05 * 0.05;
+      } else if (art.isCalc === 'tax') {
+        let nds = 0;
+        if (cType === 'SIR_MAT') nds = Math.max(0, prihodFact - matFact - transFact) / 1.22 * 0.22;
+        else if (cType === 'SIR') nds = prihodFact / 1.22 * 0.22;
+        else nds = prihodFact / 1.05 * 0.05;
+
+        if (cType === 'SKS' || cType === 'SKS238') factTotal = (prihodFact - nds) * 0.06;
+        else if (cType === 'SIR') {
+          const allExp = ARTICLES.filter(a => !a.isIncome && !a.isCalc).reduce((sum, a) => {
+            let t = 0;
+            if (a.ddsStat) t += getDdsForStat(a.ddsStat).total;
+            if (a.tabField) t += getTabelForField(a.tabField).total;
+            return sum + t;
           }, 0);
-          if (art.tabField === 'ставка_x15') sum *= 1.5;
-          factTotal += sum;
+          factTotal = (prihodFact - allExp) * 0.25;
+        }
       }
-
-      if (art.isCalc) {
-          let cType = contractInfo.code;
-          let prihod = pRev; 
-          if (art.isCalc === 'nds') {
-              factTotal = (cType === 'SIR_MAT' || cType === 'SIR') ? prihod / 1.22 * 0.22 : prihod / 1.05 * 0.05;
-          } else if (art.isCalc === 'tax') {
-              factTotal = (cType === 'SIR' || cType === 'SIR_MAT') ? prihod * 0.15 : prihod * 0.06; 
-          }
+      factTotal = Math.max(0, factTotal);
+    } else {
+      if (art.ddsStat) {
+        let sum = getDdsForStat(art.ddsStat, art.isIncome).total;
+        factTotal += art.isIncome ? Math.abs(sum) : sum;
       }
+      if (art.tabField) {
+        factTotal += getTabelForField(art.tabField).total;
+      }
+    }
 
-      if (art.isIncome) pRev += factTotal; else pExp += factTotal;
+    if (art.isIncome) pRev += factTotal; else pExp += factTotal;
   });
 
-  let valContract = projRecord['Сумма договора'];
+  let valContract = (projRecord || {})['Сумма договора'];
   if (valContract === undefined || valContract === null || valContract === '') {
-      valContract = budget['Сумма договора'];
+    valContract = budget['Сумма договора'];
   }
   
   return { contractSum: parseNum(valContract), rev: pRev, exp: pExp, profit: pRev - pExp };
@@ -555,16 +602,16 @@ function renderRpMatrix() {
   let unifiedProjects = [];
   state.rows.projects.forEach(p => {
      const name = getProjName(p);
-     if (name.toUpperCase().includes('RFI')) return; 
-     unifiedProjects.push({ proj: p, budget: state.rows.budgets.find(b => getProjName(b) === name) || {}, name });
+     const code = getProjCode(p);
+     unifiedProjects.push({ proj: p, budget: state.rows.budgets.find(b => getProjName(b) === name) || {}, name, code });
   });
 
   let matrixData = {};
   TARGET_RPS.forEach(rp => {
-      matrixData[rp] = { cntNego: 0, cntWork: 0, cntClose: 0, cntDone: 0, finContract: 0, finRev: 0, finProfit: 0 };
+      matrixData[rp] = { cntQuestion: 0, cntNego: 0, cntWork: 0, cntClose: 0, cntDone: 0, cntFinished: 0, finContract: 0, finRev: 0, finExp: 0, finProfit: 0 };
   });
 
-  let grand = { cntNego: 0, cntWork: 0, cntClose: 0, cntDone: 0, finContract: 0, finRev: 0, finProfit: 0 };
+  let grand = { cntQuestion: 0, cntNego: 0, cntWork: 0, cntClose: 0, cntDone: 0, cntFinished: 0, finContract: 0, finRev: 0, finExp: 0, finProfit: 0 };
 
   unifiedProjects.forEach(item => {
      const b = item.budget; const p = item.proj;
@@ -575,25 +622,33 @@ function renderRpMatrix() {
      if (!matchedRp) return;
 
      let status = String(b['Статус'] || b['Status'] || p['Статус'] || p['Status'] || '').toLowerCase();
-     let isTender = item.name.toLowerCase().includes('конкурс') || status.includes('конкурс');
      let isFinActive = false;
+     let isRfi = String(item.code || '').toUpperCase() === 'RFI';
+     let isRamochny = status.includes('рамочн');
 
-     if (status.includes('4') || status.includes('переговор') || isTender) {
+     // Status counting (all projects including RFI)
+     if (status.includes('2.')) {
+         matrixData[matchedRp].cntQuestion++; grand.cntQuestion++;
+     } else if (status.includes('4.') || status.includes('переговор') || status.includes('конкурс')) {
          matrixData[matchedRp].cntNego++; grand.cntNego++;
-     } else if (status.includes('1.') || status.startsWith('1') || status.includes('закрывающ') || status.includes('ждем')) {
+     } else if (status.includes('1.') || status.includes('закрывающ') || status.includes('ждем')) {
          matrixData[matchedRp].cntClose++; grand.cntClose++; isFinActive = true;
-     } else if (status.includes('5') || status.includes('выполн')) {
+     } else if (status.includes('5.') || status.includes('выполн')) {
          matrixData[matchedRp].cntDone++; grand.cntDone++; isFinActive = true;
-     } else if (status.includes('3') || status.includes('работ')) {
+     } else if (status.includes('3.') || status.includes('работ')) {
          matrixData[matchedRp].cntWork++; grand.cntWork++; isFinActive = true;
+     } else if (status.includes('заверш') || status.includes('6.')) {
+         matrixData[matchedRp].cntFinished++; grand.cntFinished++;
      }
 
-     if (isFinActive) {
+     // Financial calculations: skip Рамочный and RFI
+     if (isFinActive && !isRamochny && !isRfi) {
          let fins = getFinancialsForProject(b, p);
          matrixData[matchedRp].finContract += fins.contractSum;
          matrixData[matchedRp].finRev += fins.rev;
+         matrixData[matchedRp].finExp += fins.exp;
          matrixData[matchedRp].finProfit += fins.profit;
-         grand.finContract += fins.contractSum; grand.finRev += fins.rev; grand.finProfit += fins.profit;
+         grand.finContract += fins.contractSum; grand.finRev += fins.rev; grand.finExp += fins.exp; grand.finProfit += fins.profit;
      }
   });
 
@@ -605,12 +660,16 @@ function renderRpMatrix() {
      
      html += `<tr>
         <td style="font-weight: 600;">${rp}</td>
-        <td class="center divider" style="color:#94a3b8;">${d.cntNego || '—'}</td>
+        <td class="center divider" style="color:#a855f7; font-weight:600;">${d.cntQuestion || '—'}</td>
+        <td class="center" style="color:#94a3b8;">${d.cntNego || '—'}</td>
         <td class="center" style="color:#2d7ff9; font-weight:600;">${d.cntWork || '—'}</td>
         <td class="center" style="color:#f59e0b; font-weight:600;">${d.cntClose || '—'}</td>
         <td class="center" style="color:#10b981; font-weight:600;">${d.cntDone || '—'}</td>
+        <td class="center" style="color:#6b7280;">${d.cntFinished || '—'}</td>
+        <td class="center" style="font-weight:700;">${d.cntQuestion + d.cntNego + d.cntWork + d.cntClose + d.cntDone + d.cntFinished || '—'}</td>
         <td class="num divider">${fmt(d.finContract)}</td>
         <td class="num" style="color:#15803d;">${fmt(d.finRev)}</td>
+        <td class="num" style="color:#ef4444;">${fmt(d.finExp)}</td>
         <td class="num"><span class="badge ${marginBadge}">${margin}%</span></td>
      </tr>`;
   });
@@ -618,12 +677,16 @@ function renderRpMatrix() {
   let grandMargin = grand.finRev > 0 ? Math.round((grand.finProfit / grand.finRev) * 100) : 0;
   html += `<tr class="grand-total">
      <td style="text-align: right;">ВСЕГО:</td>
-     <td class="center divider">${grand.cntNego}</td>
+     <td class="center divider">${grand.cntQuestion}</td>
+     <td class="center">${grand.cntNego}</td>
      <td class="center">${grand.cntWork}</td>
      <td class="center">${grand.cntClose}</td>
      <td class="center">${grand.cntDone}</td>
+     <td class="center">${grand.cntFinished}</td>
+     <td class="center" style="font-weight:700;">${grand.cntQuestion + grand.cntNego + grand.cntWork + grand.cntClose + grand.cntDone + grand.cntFinished}</td>
      <td class="num divider">${fmt(grand.finContract)}</td>
      <td class="num">${fmt(grand.finRev)}</td>
+     <td class="num">${fmt(grand.finExp)}</td>
      <td class="num">${grandMargin}%</td>
   </tr>`;
 
@@ -631,14 +694,25 @@ function renderRpMatrix() {
 }
 
 function buildProjectSelector() {
-  const projsFromBudgets = state.rows.budgets.map(r => getProjName(r));
-  const projsFromProjects = state.rows.projects.map(r => getProjName(r));
-  const projs = [...new Set([...projsFromBudgets, ...projsFromProjects])]
-                .filter(Boolean)
-                .sort((a, b) => a.localeCompare(b, 'ru', { numeric: true, sensitivity: 'base' }));
-  
+  const projItems = [];
+  const seen = new Set();
+  state.rows.projects.forEach(r => {
+    const name = getProjName(r);
+    const code = getProjCode(r);
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    projItems.push({ name, display: code ? name + ' (' + code + ')' : name });
+  });
+  state.rows.budgets.forEach(r => {
+    const name = getProjName(r);
+    const code = getProjCode(r);
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    projItems.push({ name, display: code ? name + ' (' + code + ')' : name });
+  });
+  projItems.sort((a, b) => a.display.localeCompare(b.display, 'ru', { numeric: true, sensitivity: 'base' }));
   const select = document.getElementById('proj-select');
-  select.innerHTML = '<option value="">-- Выберите проект --</option>' + projs.map(p => `<option value="${p}">${p}</option>`).join('');
+  select.innerHTML = '<option value="">-- Выберите проект --</option>' + projItems.map(p => '<option value="' + p.name + '">' + p.display + '</option>').join('');
 }
 
 function renderProjectDetails() {
@@ -669,24 +743,43 @@ function renderProjectDetails() {
     }
     const plan = parseNum(planSumVal);
     
+    // Use getFinancialsForProject helper for exact matching
     let factTotal = 0;
-    const projCodeText = getProjName(mockBudget).toLowerCase();
-    const budgetId = String(mockBudget._id || '').toLowerCase();
+    if (!art._detailsFinsLoaded) {
+      // Calculate all facts once using the shared function
+      const allFins = getFinancialsForProject(mockBudget, pRecord);
+      // Store for reuse
+      window._detailFins = allFins;
+    }
+    // Use individual article calculation via getFinancialsForProject logic
+    const bName = getProjName(mockBudget).toLowerCase().trim();
+    const bCode = getProjCode(mockBudget).toLowerCase().trim();
+    const pName2 = getProjName(pRecord).toLowerCase().trim();
+    const pCode2 = getProjCode(pRecord).toLowerCase().trim();
+    const bId = String(mockBudget._id || '').toLowerCase();
+    const pId = String(pRecord._id || '').toLowerCase();
+    const _names = [...new Set([bName, pName2].filter(n => n && n.length > 1 && n !== 'без названия'))];
+    const _codes = [...new Set([bCode, pCode2].filter(c => c && c.length > 1))];
+    const _ids = [...new Set([bId, pId].filter(Boolean))];
+    
+    function _matchProj(raw) {
+      const parts = raw.toLowerCase().trim().split(',').map(s => s.trim());
+      return _ids.some(id => parts.some(p => p === id)) ||
+             _codes.some(code => parts.some(p => p === code)) ||
+             _names.some(name => parts.some(p => p === name));
+    }
 
     if (!art.isCalc && art.ddsStat) {
         const searchStats = art.ddsStat.map(s => s.toLowerCase().trim());
         let sum = state.rows.dds.filter(r => {
-           const rowProjLink = String(r['Код проекта'] || r['Проект'] || '').toLowerCase();
-           const statMatch = searchStats.some(s => String(r['Статья бюджета']||'').toLowerCase().includes(s));
-           return (budgetId && rowProjLink.includes(budgetId) || projCodeText.length > 1 && rowProjLink.includes(projCodeText)) && statMatch;
+           if (!_matchProj(String(r['Код проекта'] || r['Проект'] || ''))) return false;
+           const rowStat = String(r['Статья бюджета']||'').toLowerCase().trim();
+           return searchStats.some(s => rowStat === s || rowStat.includes(s));
         }).reduce((s, r) => s + parseNum(r['Сумма']), 0);
         factTotal += art.isIncome ? Math.abs(sum) : sum;
     }
     if (!art.isCalc && art.tabField) {
-        let sum = state.rows.tabel.filter(r => {
-           const rowProjLink = String(r['Проект'] || r['Код проекта'] || '').toLowerCase();
-           return (budgetId && rowProjLink.includes(budgetId)) || (projCodeText.length > 1 && rowProjLink.includes(projCodeText));
-        }).reduce((s, r) => {
+        let sum = state.rows.tabel.filter(r => _matchProj(String(r['Проект'] || r['Код проекта'] || ''))).reduce((s, r) => {
            if (art.tabField === 'суточные') return s + parseNum(r['Итого суточные']);
            if (art.tabField === 'ставка_x15') return s + parseNum(r['Итого ставка']) + parseNum(r['Итого бригадирские']);
            return s;
@@ -698,12 +791,31 @@ function renderProjectDetails() {
         let cType = contractInfo.code;
         if (cType === 'NONE') factTotal = 0;
         else {
-            let prihodFact = fRev; 
-            if (art.isCalc === 'nds') {
-                factTotal = (cType === 'SIR_MAT' || cType === 'SIR') ? prihodFact / 1.22 * 0.22 : prihodFact / 1.05 * 0.05;
-            } else if (art.isCalc === 'tax') {
-                factTotal = (cType === 'SIR' || cType === 'SIR_MAT') ? prihodFact * 0.15 : prihodFact * 0.06; 
+            function _getDdsSum(stats) {
+              const ss = stats.map(s => s.toLowerCase().trim());
+              return state.rows.dds.filter(r => {
+                if (!_matchProj(String(r['Код проекта'] || r['Проект'] || ''))) return false;
+                const rowStat = String(r['Статья бюджета']||'').toLowerCase().trim();
+                return ss.some(s => rowStat === s || rowStat.includes(s));
+              }).reduce((s, r) => s + parseNum(r['Сумма']), 0);
             }
+            const prihodFact = Math.abs(_getDdsSum(['01 Приход', 'Приход']));
+            const matFact = Math.abs(_getDdsSum(['03 Материалы']));
+            const transFact = Math.abs(_getDdsSum(['08 Транспортные расходы']));
+            if (art.isCalc === 'nds') {
+                if (cType === 'SIR_MAT') factTotal = Math.max(0, prihodFact - matFact - transFact) / 1.22 * 0.22;
+                else if (cType === 'SIR') factTotal = prihodFact / 1.22 * 0.22;
+                else factTotal = prihodFact / 1.05 * 0.05;
+            } else if (art.isCalc === 'tax') {
+                let nds = 0;
+                if (cType === 'SIR_MAT') nds = Math.max(0, prihodFact - matFact - transFact) / 1.22 * 0.22;
+                else if (cType === 'SIR') nds = prihodFact / 1.22 * 0.22;
+                else nds = prihodFact / 1.05 * 0.05;
+                if (cType === 'SKS' || cType === 'SKS238') factTotal = (prihodFact - nds) * 0.06;
+                else if (cType === 'SIR') factTotal = Math.max(0, (prihodFact - fExp) * 0.25);
+                else factTotal = 0;
+            }
+            factTotal = Math.max(0, factTotal);
         }
     }
 
