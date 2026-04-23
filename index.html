@@ -586,14 +586,27 @@ function renderAllProjectsTop() {
 
   let unified = state.rows.projects.filter(p => {
      const pRp = String(p['Ответственный'] || p['Руководитель проекта'] || p['РП'] || p['Менеджер'] || '').trim();
-     return pRp.includes(rp) || pRp === rp;
+     // Check if RP name is contained (handles comma-separated values from link columns)
+     const rpParts = pRp.split(',').map(s => s.trim());
+     return rpParts.some(part => part === rp || part.includes(rp));
+  });
+  console.log(`All projects for ${rp}: ${unified.length} found out of ${state.rows.projects.length} total`);
+  // Debug: show RFI projects and why they're filtered
+  const rfiProjects = state.rows.projects.filter(p => {
+    const code = getProjCode(p);
+    const name = getProjName(p);
+    return code.toUpperCase().includes('RFI') || name.toUpperCase().includes('RFI');
+  });
+  console.log(`RFI projects total: ${rfiProjects.length}`);
+  rfiProjects.slice(0, 5).forEach(p => {
+    const pRp = String(p['Ответственный'] || p['Руководитель проекта'] || p['РП'] || '').trim();
+    console.log(`  RFI: ${getProjName(p)} (${getProjCode(p)}) | Ответственный: "${pRp}" | match ${rp}: ${pRp.includes(rp)}`);
   });
 
   let groups = {};
   unified.forEach(p => {
      const name = getProjName(p);
      const code = getProjCode(p);
-     if (name.toUpperCase().includes('RFI') || code.toUpperCase().includes('RFI')) return;
      let st = String(p['Статус'] || p['Status'] || 'Без статуса').trim();
      if (!groups[st]) groups[st] = [];
      groups[st].push(p);
@@ -806,29 +819,49 @@ function renderRpSummary() {
   const table = document.getElementById('rp-summary-table');
   let unifiedProjects = [];
   
+  // Codes that are NOT unique identifiers - skip them for matching
+  const NON_UNIQUE_CODES = ['конкурс', 'rfi', 'квалификация', 'счет', 'депозит'];
+  
+  function isUniqueCode(code) {
+    if (!code) return false;
+    const c = code.toLowerCase().trim();
+    return c.length > 0 && !NON_UNIQUE_CODES.some(nuc => c === nuc || c.startsWith(nuc + ' '));
+  }
+
   function findMatch(name, code) {
      const n1 = name.toLowerCase().replace(/\s+/g, '');
      const c1 = code.toLowerCase().replace(/\s+/g, '');
-     return unifiedProjects.find(u => {
-         const n2 = u.name.toLowerCase().replace(/\s+/g, '');
+     // First try exact code match (only for unique codes)
+     if (isUniqueCode(code)) {
+       const byCode = unifiedProjects.find(u => {
+         if (!isUniqueCode(u.code)) return false;
          const c2 = u.code.toLowerCase().replace(/\s+/g, '');
-         if (c1 && c2 && c1 === c2) return true;
-         if (n1 && n2 && n1 === n2) return true;
-         return false;
-     });
+         return c2 && c1 === c2;
+       });
+       if (byCode) return byCode;
+     }
+     // Then try exact name match
+     if (n1 && n1 !== 'безназвания') {
+       const byName = unifiedProjects.find(u => {
+         const n2 = u.name.toLowerCase().replace(/\s+/g, '');
+         return n2 && n2 !== 'безназвания' && n1 === n2;
+       });
+       if (byName) return byName;
+     }
+     return null;
   }
 
   state.rows.budgets.forEach(b => {
      const name = getProjName(b);
      const code = getProjCode(b);
-     if (name.toUpperCase().includes('RFI') || code.toUpperCase().includes('RFI')) return; 
+     if (code.toUpperCase() === 'RFI') return;
      unifiedProjects.push({ budget: b, proj: null, name, code });
   });
 
   state.rows.projects.forEach(p => {
      const name = getProjName(p);
      const code = getProjCode(p);
-     if (name.toUpperCase().includes('RFI') || code.toUpperCase().includes('RFI')) return; 
+     if (code.toUpperCase() === 'RFI') return;
      
      let match = findMatch(name, code);
      if (match) {
@@ -845,7 +878,8 @@ function renderRpSummary() {
      'В работе': { rows: [], contractSum: 0, rev: 0, exp: 0, profit: 0 },
      'Рамочный': { rows: [], contractSum: 0, rev: 0, exp: 0, profit: 0 },
      'Выполнено': { rows: [], contractSum: 0, rev: 0, exp: 0, profit: 0 },
-     'Переговоры / Конкурс': { rows: [], contractSum: 0, rev: 0, exp: 0, profit: 0 }
+     'Переговоры / Конкурс': { rows: [], contractSum: 0, rev: 0, exp: 0, profit: 0 },
+     'Прочие': { rows: [], contractSum: 0, rev: 0, exp: 0, profit: 0 }
   };
   
   let grandContractSum = 0, grandRev = 0, grandExp = 0, grandProfit = 0;
@@ -860,19 +894,23 @@ function renderRpSummary() {
      if (!bRp.includes(rp) && !pRp.includes(rp) && bRp !== rp && pRp !== rp) return; 
      
      let status = String(b['Статус'] || b['Status'] || p['Статус'] || p['Status'] || '').toLowerCase();
-     let isTender = item.name.toLowerCase().includes('конкурс') || item.code.toLowerCase().includes('конкурс') || status.includes('конкурс');
      
      let statusKey = '';
+     // Сначала проверяем реальный статус из базы — он имеет приоритет
      if (status.includes('рамочн')) {
          statusKey = 'Рамочный';
-     } else if (status.includes('4') || status.includes('переговор') || isTender) {
-         statusKey = 'Переговоры / Конкурс';
-     } else if (status.includes('1.') || status.startsWith('1') || status.includes('закрывающ') || status.includes('ждем')) {
+     } else if (status.includes('1.') || status.includes('закрывающ') || status.includes('ждем')) {
          statusKey = 'Закрытие и Оплата';
-     } else if (status.includes('5') || status.includes('выполн')) {
+     } else if (status.includes('5.') || status.includes('выполн')) {
          statusKey = 'Выполнено';
-     } else if (status.includes('3') || status.includes('работ')) {
+     } else if (status.includes('3.') || status.includes('работ')) {
          statusKey = 'В работе';
+     } else if (status.includes('4.') || status.includes('переговор') || status.includes('конкурс')) {
+         statusKey = 'Переговоры / Конкурс';
+     } else if (status.includes('2.')) {
+         statusKey = 'Переговоры / Конкурс';
+     } else if (status) {
+         statusKey = 'Прочие';
      }
      
      if (!statusKey) return;
@@ -882,6 +920,10 @@ function renderRpSummary() {
          valContract = b['Сумма договора'];
      }
      const pContractSum = parseNum(valContract);
+     // Debug: log contract sum for each project
+     if (pContractSum > 0 || item.name.includes('Янтарь')) {
+       console.log(`Summary: ${item.name} (${item.code}) | Сумма договора: ${pContractSum} | из Проекты: ${p['Сумма договора']} | из Бюджеты: ${b['Сумма договора']} | projMatch: ${!!item.proj} | budgetMatch: ${!!item.budget}`);
+     }
 
      let pRev = 0, pExp = 0;
      const mockBudget = item.budget || { 'Название проекта': item.name, 'Код проекта': item.code };
