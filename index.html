@@ -74,6 +74,28 @@
   .spinner { width: 36px; height: 36px; border: 3px solid #e2e8f0; border-top-color: #2d7ff9; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { font-size: 14px; color: #64748b; font-weight: 500; }
+
+  /* Budget plan form */
+  .budget-form { padding: 14px 16px; }
+  .budget-form-title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+  .budget-form-title button { font-size: 11px; padding: 4px 10px; border: 1px solid #ddd; border-radius: 5px; background: #fff; color: #666; cursor: pointer; }
+  .budget-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .budget-row { display: grid; grid-template-columns: 1fr 160px 130px 90px auto; gap: 8px; align-items: center; }
+  .budget-row input, .budget-row select { padding: 6px 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 12px; font-family: inherit; background: #fff; color: #1a1a1a; width: 100%; }
+  .budget-row .del-btn { background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px; padding: 0 4px; }
+  .budget-row .del-btn:hover { color: #ef4444; }
+  .btn-add-row { background: none; border: 1px dashed #ccc; border-radius: 5px; padding: 6px 12px; font-size: 12px; color: #888; cursor: pointer; width: 100%; }
+  .btn-add-row:hover { border-color: #2d7ff9; color: #2d7ff9; }
+  .btn-save-plan { background: #1e2a3a; border: none; border-radius: 6px; padding: 10px 20px; font-size: 13px; color: #fff; cursor: pointer; font-weight: 600; width: 100%; margin-top: 12px; }
+  .btn-save-plan:hover { background: #0f172a; }
+  .btn-save-plan:disabled { background: #cbd5e1; cursor: not-allowed; }
+  .plan-msg { font-size: 12px; margin-top: 8px; padding: 8px 12px; border-radius: 6px; display: none; font-weight: 500; }
+  .plan-msg.ok { background: #dcfce7; color: #15803d; }
+  .plan-msg.err { background: #fee2e2; color: #b91c1c; }
+  .param-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .param-label { font-size: 11px; color: #64748b; margin-bottom: 3px; font-weight: 500; }
+  .param-grid input, .param-grid select { padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 12px; font-family: inherit; background: #fff; color: #1a1a1a; width: 100%; }
+  .section-label { font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
 </style>
 </head>
 <body>
@@ -165,6 +187,60 @@
          </table>
     </div>
 
+
+    <div class="card" id="budget-form-card" style="margin-top: 32px; border: 2px solid #2d7ff9;">
+      <div class="budget-form">
+        <div class="budget-form-title">
+          <span>Формирование плана БДДС</span>
+          <button onclick="toggleBudgetForm()">Свернуть ▲</button>
+        </div>
+        <div id="budget-form-body">
+
+          <div style="margin-bottom:14px;">
+            <div class="param-label">Проект (из таблицы Проекты)</div>
+            <select id="plan-proj-select" style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;font-weight:600;background:#fff;"></select>
+          </div>
+
+          <div class="param-grid" style="grid-template-columns:1fr 1fr;">
+            <div><div class="param-label">Тип договора</div>
+              <select id="p-contract-type"><option value="">— Выбрать —</option><option>СКС ПЛЮС</option><option>СИР</option><option>СИР материалы</option><option>СКС ПЛЮС 23.8+10</option></select>
+            </div>
+            <div><div class="param-label">МИН сумма договора</div><div id="min-contract-display" style="padding:7px 8px;background:#eff6ff;border:2px solid #2d7ff9;border-radius:5px;font-size:14px;font-weight:700;color:#1e3a8a;text-align:center;min-height:34px;">—</div></div>
+          </div>
+          <div class="param-grid" style="grid-template-columns:1fr 1fr;margin-top:8px;">
+            <div><div class="param-label">Сумма договора (заполняет РП)</div><input type="number" id="p-contract-sum" min="0" step="0.01" placeholder="Введи после расчёта МИН суммы" style="border:2px solid #22c55e;background:#f0fdf4;font-weight:600;" /></div>
+            <div style="display:flex;align-items:flex-end;"><div style="font-size:11px;color:#64748b;padding:8px 0;">← Сохранится в таблицу Проекты</div></div>
+          </div>
+
+          <div class="section-label" style="margin-top:12px;">Параметры (ЗП, суточные, билеты)</div>
+          <div class="param-grid">
+            <div><div class="param-label">Начало</div><input type="date" id="p-start" /></div>
+            <div><div class="param-label">Конец</div><input type="date" id="p-end" /></div>
+            <div><div class="param-label">Кол-во человек</div><input type="number" id="p-people" min="1" value="1" /></div>
+            <div><div class="param-label">Тип учёта дней</div>
+              <select id="p-calctype"><option value="Календарные">Календарные</option><option value="Рабочие">Рабочие</option></select>
+            </div>
+          </div>
+          <div class="param-grid">
+            <div><div class="param-label">ЗП ставка/день</div><input type="number" id="p-salary" min="0" value="5000" /></div>
+            <div><div class="param-label">Суточные/день</div><input type="number" id="p-perday" min="0" value="700" /></div>
+            <div><div class="param-label">Проживание/день</div><input type="number" id="p-acc" min="0" value="0" /></div>
+            <div><div class="param-label">Билеты (1 чел)</div><input type="number" id="p-ticket" min="0" value="0" /></div>
+          </div>
+          
+
+          <div style="border-top:1px solid #e2e8f0;padding-top:14px;margin-bottom:8px;">
+            <div class="section-label">Прочие статьи (Материалы, Субподрядчик и др.)</div>
+            <div class="budget-rows" id="budget-rows"></div>
+            <button class="btn-add-row" onclick="addBudgetRow()">+ Добавить строку</button>
+          </div>
+
+          <button onclick="calcMinContract()" style="width:100%;padding:10px;background:#2d7ff9;border:none;border-radius:6px;font-size:13px;color:#fff;cursor:pointer;font-weight:600;margin-bottom:8px;">Рассчитать МИН сумму договора</button>
+          <button class="btn-save-plan" id="save-plan-btn" onclick="savePlan()">Сформировать и сохранить в БДДС</button>
+          <div class="plan-msg" id="plan-msg"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -195,8 +271,14 @@ const ARTICLES = [
 
 let state = { 
   token: null, accessToken: null, dtableUuid: null, apiGateway: null, 
-  rows: {}, colMaps: {}, colOptionsMap: {}, 
-  selectedRp: null, selectedProj: null, selectedArticle: null, overrideContract: 'auto'
+  rows: {}, colMaps: {}, colOptionsMap: {}, tableIdMap: {},
+  selectedRp: null, selectedProj: null, selectedArticle: null, overrideContract: 'auto',
+  planMeta: {
+    budgetLinkId: null, budgetTableId: null, budgetOtherTableId: null,
+    projectLinkId: null, projectTableId: null, projectOtherTableId: null,
+    budgetProjLinkId: null, budgetProjTableId: null, budgetProjOtherTableId: null,
+    articleOptions: []
+  }
 };
 
 window.toggleGroup = function(id) {
@@ -245,9 +327,11 @@ async function init() {
     state.rows.budgets = await fetchAllRowsSafe('Бюджеты');
     state.rows.dds = await fetchAllRowsSafe('ДДС');
     state.rows.tabel = await fetchAllRowsSafe('Табель и начисления');
-    state.rows.projects = await fetchAllRowsSafe('Проекты'); 
+    state.rows.projects = await fetchAllRowsSafe('Проекты');
+    state.rows.holidays = await fetchAllRowsSafe('Праздники');
     
     buildSelectors();
+    updatePlanProjSelect();
     setLoading(false);
     document.getElementById('setup').style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -273,6 +357,7 @@ async function fetchMetadata() {
   const d = await r.json();
   
   (d.metadata.tables || []).forEach(tbl => {
+    state.tableIdMap[tbl._id] = tbl.name;
     state.colMaps[tbl.name] = {};
     (tbl.columns || []).forEach(col => { 
       state.colMaps[tbl.name][col.key] = col.name; 
@@ -281,6 +366,28 @@ async function fetchMetadata() {
         col.data.options.forEach(opt => {
           state.colOptionsMap[col.name][opt.id] = opt.name;
         });
+      }
+      // БДДС План links
+      if (tbl.name === 'БДДС План') {
+        if (col.name === 'Название проекта' && col.data && col.data.link_id) {
+          state.planMeta.budgetLinkId = col.data.link_id;
+          state.planMeta.budgetTableId = col.data.table_id;
+          state.planMeta.budgetOtherTableId = col.data.other_table_id;
+        }
+        if (col.name === 'Проект' && col.data && col.data.link_id) {
+          state.planMeta.projectLinkId = col.data.link_id;
+          state.planMeta.projectTableId = col.data.table_id;
+          state.planMeta.projectOtherTableId = col.data.other_table_id;
+        }
+        if (col.name === 'Статьи расходов' && col.data && col.data.options) {
+          state.planMeta.articleOptions = col.data.options.map(o => o.name).filter(Boolean);
+        }
+      }
+      // Бюджеты → Проекты link
+      if (tbl.name === 'Бюджеты' && col.name === 'Название проекта' && col.data && col.data.link_id) {
+        state.planMeta.budgetProjLinkId = col.data.link_id;
+        state.planMeta.budgetProjTableId = col.data.table_id;
+        state.planMeta.budgetProjOtherTableId = col.data.other_table_id;
       }
     });
   });
@@ -382,22 +489,24 @@ function getContractInfo(budget) {
 
 function getDdsFact(budget, ddsStats, isIncome) {
   if (!ddsStats || ddsStats.length === 0) return { total: 0, rows: [] };
-  const projCodeText = getProjName(budget).toLowerCase();
-  const projCodeVal = getProjCode(budget).toLowerCase();
+  const projCodeText = getProjName(budget).toLowerCase().trim();
+  const projCodeVal = getProjCode(budget).toLowerCase().trim();
   const budgetId = String(budget._id || '').toLowerCase();
   let projectId = '';
   if (state.rows.projects && state.rows.projects.length) {
-    const p = state.rows.projects.find(x => getProjName(x).toLowerCase() === projCodeText);
+    const p = state.rows.projects.find(x => getProjName(x).toLowerCase().trim() === projCodeText);
     if (p) projectId = String(p._id || '').toLowerCase();
   }
   const searchStats = ddsStats.map(s => s.toLowerCase().trim());
   const rows = state.rows.dds.filter(r => {
-    const rowProjLink = String(r['Код проекта'] || r['Проект'] || '').toLowerCase();
-    const matchById = budgetId && rowProjLink.includes(budgetId);
-    const matchByProjId = projectId && rowProjLink.includes(projectId);
-    const matchByText = projCodeText.length > 1 && rowProjLink.includes(projCodeText);
-    const matchByCode = projCodeVal.length > 1 && rowProjLink.includes(projCodeVal);
-    const codeMatch = matchById || matchByProjId || matchByText || matchByCode;
+    const rowProjRaw = String(r['Код проекта'] || r['Проект'] || '').toLowerCase().trim();
+    // Split comma-separated link values and check each part exactly
+    const rowProjParts = rowProjRaw.split(',').map(s => s.trim());
+    const matchById = budgetId && rowProjParts.some(p => p === budgetId);
+    const matchByProjId = projectId && rowProjParts.some(p => p === projectId);
+    const matchByCode = projCodeVal.length > 1 && rowProjParts.some(p => p === projCodeVal);
+    const matchByText = projCodeText.length > 1 && rowProjParts.some(p => p === projCodeText);
+    const codeMatch = matchById || matchByProjId || matchByCode || matchByText;
     const rowStat = String(r['Статья бюджета'] || '').toLowerCase().trim();
     const statMatch = searchStats.some(s => rowStat === s || rowStat.includes(s));
     return codeMatch && statMatch;
@@ -408,20 +517,21 @@ function getDdsFact(budget, ddsStats, isIncome) {
 }
 
 function getTabelFact(budget, field) {
-  const projCodeText = getProjName(budget).toLowerCase();
-  const projCodeVal = getProjCode(budget).toLowerCase();
+  const projCodeText = getProjName(budget).toLowerCase().trim();
+  const projCodeVal = getProjCode(budget).toLowerCase().trim();
   const budgetId = String(budget._id || '').toLowerCase();
   let projectId = '';
   if (state.rows.projects && state.rows.projects.length) {
-    const p = state.rows.projects.find(x => getProjName(x).toLowerCase() === projCodeText);
+    const p = state.rows.projects.find(x => getProjName(x).toLowerCase().trim() === projCodeText);
     if (p) projectId = String(p._id || '').toLowerCase();
   }
   const rows = state.rows.tabel.filter(r => {
-    const rowProjLink = String(r['Проект'] || r['Код проекта'] || '').toLowerCase();
-    return (budgetId && rowProjLink.includes(budgetId)) || 
-           (projectId && rowProjLink.includes(projectId)) || 
-           (projCodeText.length > 1 && rowProjLink.includes(projCodeText)) ||
-           (projCodeVal.length > 1 && rowProjLink.includes(projCodeVal));
+    const rowProjRaw = String(r['Проект'] || r['Код проекта'] || '').toLowerCase().trim();
+    const rowProjParts = rowProjRaw.split(',').map(s => s.trim());
+    return (budgetId && rowProjParts.some(p => p === budgetId)) || 
+           (projectId && rowProjParts.some(p => p === projectId)) || 
+           (projCodeVal.length > 1 && rowProjParts.some(p => p === projCodeVal)) ||
+           (projCodeText.length > 1 && rowProjParts.some(p => p === projCodeText));
   });
   let total = 0;
   if (field === 'суточные') total = rows.reduce((s, r) => s + parseNum(r['Итого суточные']), 0);
@@ -931,6 +1041,339 @@ function fmt(n) { return Math.round(n || 0).toLocaleString('ru-RU') + ' ₽'; }
 function setLoading(s, t) { document.getElementById('loading').style.display = s ? 'flex' : 'none'; if(t) document.getElementById('loading-text').textContent = t; }
 function saveToken() { state.token = document.getElementById('token-input').value.trim(); localStorage.setItem('st_token', state.token); init(); }
 function clearToken() { localStorage.removeItem('st_token'); location.reload(); }
+
+// ─── Budget plan form ────────────────────────────────────────────────────────
+let budgetFormVisible = true;
+
+function toggleBudgetForm() {
+  budgetFormVisible = !budgetFormVisible;
+  document.getElementById('budget-form-body').style.display = budgetFormVisible ? 'block' : 'none';
+  document.querySelector('.budget-form-title button').textContent = budgetFormVisible ? 'Свернуть ▲' : 'Развернуть ▼';
+}
+
+function updatePlanProjSelect() {
+  const planSel = document.getElementById('plan-proj-select');
+  if (!planSel) return;
+  const allProjs = state.rows.projects.map(r => r['Название'] || r['Name']).filter(Boolean).sort();
+  planSel.innerHTML = allProjs.map(p => `<option value="${p}">${p}</option>`).join('');
+  if (state.selectedProj) planSel.value = state.selectedProj;
+}
+
+function prefillFromBudget() {
+  const planSel = document.getElementById('plan-proj-select');
+  const proj = planSel ? planSel.value : state.selectedProj;
+  if (!proj) return;
+  const b = state.rows.budgets.find(r => getProjName(r) === proj) || {};
+  if (b['Тип договора']) document.getElementById('p-contract-type').value = b['Тип договора'];
+  if (b['Сумма договора']) document.getElementById('p-contract-sum').value = parseNum(b['Сумма договора']);
+  if (b['Дата начала']) document.getElementById('p-start').value = String(b['Дата начала']).substring(0, 10);
+  if (b['Дата окончания']) document.getElementById('p-end').value = String(b['Дата окончания']).substring(0, 10);
+  if (b['Кол-во человек']) document.getElementById('p-people').value = parseNum(b['Кол-во человек']);
+  if (b['Тип учета дней']) document.getElementById('p-calctype').value = b['Тип учета дней'];
+  if (b['ЗП ставка в день']) document.getElementById('p-salary').value = parseNum(b['ЗП ставка в день']);
+  if (b['Суточные']) document.getElementById('p-perday').value = parseNum(b['Суточные']);
+  if (b['Проживание']) document.getElementById('p-acc').value = parseNum(b['Проживание']);
+  if (b['Билеты']) document.getElementById('p-ticket').value = parseNum(b['Билеты']);
+}
+
+function addBudgetRow() {
+  const container = document.getElementById('budget-rows');
+  const manualArticles = ['Приход','Материалы','Субподрядчик','ЗП Самозанятых','Транспортные расходы','Административные расходы','Представительские расходы'];
+  const opts = manualArticles.map(o => `<option value="${o}">${o}</option>`).join('');
+  const today = new Date().toISOString().split('T')[0];
+  const div = document.createElement('div');
+  div.className = 'budget-row';
+  div.innerHTML = `
+    <input type="text" placeholder="Название" class="br-name" />
+    <select class="br-article"><option value="">— Статья —</option>${opts}</select>
+    <input type="date" class="br-date" value="${today}" />
+    <input type="number" placeholder="Сумма" class="br-sum" min="0" step="0.01" />
+    <button class="del-btn" onclick="this.parentElement.remove()">×</button>`;
+  container.appendChild(div);
+}
+
+function calcWorkingDays(startStr, endStr) {
+  const offDays = new Set();
+  const extraWorkDays = new Set();
+  (state.rows.holidays || []).forEach(row => {
+    const d = String(row['Дата'] || '').substring(0, 10);
+    if (d && row['Тип дня'] === 'Праздник') offDays.add(d);
+    if (d && row['Тип дня'] === 'Рабочий выходной') extraWorkDays.add(d);
+  });
+  const start = new Date(startStr), end = new Date(endStr);
+  const monthStats = {};
+  let cur = new Date(start);
+  while (cur <= end) {
+    const y = cur.getFullYear(), m = String(cur.getMonth()+1).padStart(2,'0'), d = String(cur.getDate()).padStart(2,'0');
+    const dateStr = `${y}-${m}-${d}`, monthStr = `${y}-${m}`;
+    if (!monthStats[monthStr]) monthStats[monthStr] = { calendar: 0, working: 0 };
+    monthStats[monthStr].calendar++;
+    const dow = cur.getDay();
+    const isWeekend = (dow === 0 || dow === 6);
+    if (isWeekend ? extraWorkDays.has(dateStr) : !offDays.has(dateStr)) monthStats[monthStr].working++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return monthStats;
+}
+
+function generateScriptRows(startStr, endStr, people, calcType, salary, perday, acc, ticket) {
+  const rows = [];
+  if (!startStr || !endStr || !people) return rows;
+  if (ticket > 0 && people > 0) {
+    rows.push({ Name: 'Билеты ТУДА', article: 'Командировочные расходы', date: startStr, sum: ticket * people });
+    rows.push({ Name: 'Билеты ОБРАТНО', article: 'Командировочные расходы', date: endStr, sum: ticket * people });
+  }
+  const monthStats = calcWorkingDays(startStr, endStr);
+  const months = Object.keys(monthStats).sort();
+  for (let i = 0; i < months.length; i++) {
+    const month = months[i];
+    const { working, calendar } = monthStats[month];
+    const daysForSalary = (calcType === 'Рабочие') ? working : calendar;
+    const [y, m] = month.split('-').map(Number);
+    const monthStart = (i === 0) ? startStr : `${y}-${String(m).padStart(2,'0')}-01`;
+    const lastDay = new Date(y, m, 0);
+    const lastDayStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+    const monthEnd = (lastDayStr > endStr) ? endStr : lastDayStr;
+    if (salary > 0) rows.push({ Name: `ЗП (${month})`, article: 'ЗП Монтажников', date: monthEnd, sum: daysForSalary * people * salary });
+    if (perday > 0) rows.push({ Name: `Суточные (${month})`, article: 'Командировочные расходы', date: monthStart, sum: calendar * people * perday });
+    if (acc > 0) rows.push({ Name: `Проживание (${month})`, article: 'Командировочные расходы', date: monthStart, sum: calendar * people * acc });
+  }
+  return rows;
+}
+
+async function createPlanRow(rowData, budgetRowId, projectRowId) {
+  const r = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/rows/`, {
+    method: 'POST',
+    headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ table_name: 'БДДС План', rows: [rowData] })
+  });
+  if (!r.ok) throw new Error('Ошибка: ' + r.status);
+  const created = await r.json();
+  const newRowId = created.row_ids?.[0]?._id || created.inserted_row_ids?.[0];
+  if (!newRowId) return;
+  await new Promise(res => setTimeout(res, 300));
+  if (budgetRowId && state.planMeta.budgetLinkId) {
+    await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/links/`, {
+      method: 'POST', headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table_id: state.planMeta.budgetTableId, other_table_id: state.planMeta.budgetOtherTableId, link_id: state.planMeta.budgetLinkId, other_rows_ids_map: { [newRowId]: [budgetRowId] } })
+    });
+  }
+  if (projectRowId && state.planMeta.projectLinkId) {
+    await new Promise(res => setTimeout(res, 200));
+    await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/links/`, {
+      method: 'POST', headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table_id: state.planMeta.projectTableId, other_table_id: state.planMeta.projectOtherTableId, link_id: state.planMeta.projectLinkId, other_rows_ids_map: { [newRowId]: [projectRowId] } })
+    });
+  }
+}
+
+async function savePlan() {
+  const planSel = document.getElementById('plan-proj-select');
+  const proj = planSel ? planSel.value : state.selectedProj;
+  if (!proj) return showPlanMsg('Выбери проект', false);
+
+  const contractType = document.getElementById('p-contract-type').value;
+  const contractSum = parseFloat(document.getElementById('p-contract-sum').value) || 0;
+  const startStr = document.getElementById('p-start').value;
+  const endStr = document.getElementById('p-end').value;
+  const people = parseInt(document.getElementById('p-people').value) || 0;
+  const calcType = document.getElementById('p-calctype').value;
+  const salary = parseFloat(document.getElementById('p-salary').value) || 0;
+  const perday = parseFloat(document.getElementById('p-perday').value) || 0;
+  const acc = parseFloat(document.getElementById('p-acc').value) || 0;
+  const ticket = parseFloat(document.getElementById('p-ticket').value) || 0;
+
+  // Find project row ID
+  const projRow = state.rows.projects.find(r => (r['Название'] || r['Name']) === proj);
+  const projectRowId = projRow?._id;
+
+  // Find or create budget row
+  let budgetRow = state.rows.budgets.find(r => getProjName(r) === proj);
+  let budgetRowId = budgetRow?._id;
+
+  const autoRows = (startStr && endStr) ? generateScriptRows(startStr, endStr, people, calcType, salary, perday, acc, ticket) : [];
+  const manualRows = [];
+  for (let row of document.querySelectorAll('#budget-rows .budget-row')) {
+    const name = row.querySelector('.br-name').value.trim();
+    const article = row.querySelector('.br-article').value;
+    const date = row.querySelector('.br-date').value;
+    const sum = parseFloat(row.querySelector('.br-sum').value);
+    if (!article || !sum || sum <= 0) continue;
+    manualRows.push({ Name: name || article, article, date, sum });
+  }
+  const allRows = [...autoRows, ...manualRows];
+  if (allRows.length === 0) return showPlanMsg('Нет строк — заполни параметры или добавь вручную', false);
+
+  const btn = document.getElementById('save-plan-btn');
+  btn.disabled = true;
+  btn.textContent = 'Сохраняем бюджет...';
+
+  try {
+    // Calculate totals for Бюджеты
+    const totalSalary = autoRows.filter(r => r.article === 'ЗП Монтажников').reduce((s,r) => s + r.sum, 0);
+    const totalKom = autoRows.filter(r => r.article === 'Командировочные расходы').reduce((s,r) => s + r.sum, 0);
+    const manualTotals = {};
+    manualRows.forEach(r => { manualTotals[r.article] = (manualTotals[r.article] || 0) + r.sum; });
+
+    const budgetData = {};
+    if (contractType) budgetData['Тип договора'] = contractType;
+    // Сумма договора сохраняется в Проекты, не в Бюджеты
+    if (startStr) budgetData['Дата начала'] = startStr;
+    if (endStr) budgetData['Дата окончания'] = endStr;
+    if (people) budgetData['Кол-во человек'] = people;
+    if (calcType) budgetData['Тип учета дней'] = calcType;
+    if (salary) budgetData['ЗП ставка в день'] = salary;
+    if (perday) budgetData['Суточные'] = perday;
+    if (acc) budgetData['Проживание'] = acc;
+    if (ticket) budgetData['Билеты'] = ticket;
+    if (totalSalary) budgetData['ЗП Монтажников'] = totalSalary;
+    if (totalKom) budgetData['Командировочные расходы'] = totalKom;
+    if (manualTotals['Материалы']) budgetData['Материалы'] = manualTotals['Материалы'];
+    if (manualTotals['Субподрядчик']) budgetData['Субпордядчик'] = manualTotals['Субподрядчик'];
+    if (manualTotals['Транспортные расходы']) budgetData['Транспортные расходы'] = manualTotals['Транспортные расходы'];
+
+    if (!budgetRowId) {
+      const br = await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/rows/`, {
+        method: 'POST', headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table_name: 'Бюджеты', rows: [budgetData] })
+      });
+      if (br.ok) {
+        const bCreated = await br.json();
+        budgetRowId = bCreated.row_ids?.[0]?._id || bCreated.inserted_row_ids?.[0];
+        if (budgetRowId && projectRowId && state.planMeta.budgetProjLinkId) {
+          await new Promise(res => setTimeout(res, 300));
+          await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/links/`, {
+            method: 'POST', headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ table_id: state.planMeta.budgetProjTableId, other_table_id: state.planMeta.budgetProjOtherTableId, link_id: state.planMeta.budgetProjLinkId, other_rows_ids_map: { [budgetRowId]: [projectRowId] } })
+          });
+        }
+      }
+    } else {
+      await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/rows/`, {
+        method: 'PUT', headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table_name: 'Бюджеты', row_id: budgetRowId, row: budgetData })
+      });
+    }
+
+    for (let i = 0; i < allRows.length; i++) {
+      btn.textContent = `Сохраняем ${i+1}/${allRows.length}...`;
+      await createPlanRow({ 'Name': allRows[i].Name, 'Статьи расходов': allRows[i].article, 'Дата': allRows[i].date, 'Сумма': allRows[i].sum }, budgetRowId, projectRowId);
+    }
+
+    // Save Сумма договора to Проекты
+    if (contractSum > 0 && projectRowId) {
+      await fetch(`${state.apiGateway}api/v2/dtables/${state.dtableUuid}/rows/`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Token ${state.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table_name: 'Проекты', row_id: projectRowId, row: { 'Сумма договора': contractSum } })
+      });
+    }
+
+    document.getElementById('budget-rows').innerHTML = '';
+    showPlanMsg(`✓ Сохранено ${allRows.length} строк (авто: ${autoRows.length}, вручную: ${manualRows.length})${contractSum > 0 ? ' + Сумма договора в Проекты' : ''}`, true);
+
+    // Reload data
+    btn.textContent = 'Обновляем данные...';
+    state.rows.budgets = await fetchAllRowsSafe('Бюджеты');
+    render();
+  } catch(e) {
+    showPlanMsg('Ошибка: ' + e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Сформировать и сохранить в БДДС';
+  }
+}
+
+function calcMinContract() {
+  const contractType = document.getElementById('p-contract-type').value;
+  if (!contractType) { document.getElementById('min-contract-display').textContent = 'Выбери тип договора'; return; }
+
+  const startStr = document.getElementById('p-start').value;
+  const endStr = document.getElementById('p-end').value;
+  const people = parseInt(document.getElementById('p-people').value) || 0;
+  const calcType = document.getElementById('p-calctype').value;
+  const salary = parseFloat(document.getElementById('p-salary').value) || 0;
+  const perday = parseFloat(document.getElementById('p-perday').value) || 0;
+  const acc = parseFloat(document.getElementById('p-acc').value) || 0;
+  const ticket = parseFloat(document.getElementById('p-ticket').value) || 0;
+
+  // Auto-generated expenses
+  const autoRows = (startStr && endStr) ? generateScriptRows(startStr, endStr, people, calcType, salary, perday, acc, ticket) : [];
+  const zpTotal = autoRows.filter(r => r.article === 'ЗП Монтажников').reduce((s,r) => s+r.sum, 0);
+  const komTotal = autoRows.filter(r => r.article === 'Командировочные расходы').reduce((s,r) => s+r.sum, 0);
+
+  // Manual expenses from form rows
+  const manualTotals = {};
+  for (let row of document.querySelectorAll('#budget-rows .budget-row')) {
+    const article = row.querySelector('.br-article').value;
+    const sum = parseFloat(row.querySelector('.br-sum').value) || 0;
+    if (article && sum > 0) manualTotals[article] = (manualTotals[article] || 0) + sum;
+  }
+
+  const adm = manualTotals['Административные расходы'] || 0;
+  const mat = manualTotals['Материалы'] || 0;
+  const sub = manualTotals['Субподрядчик'] || 0;
+  const zpSam = manualTotals['ЗП Самозанятых'] || 0;
+  const tr = manualTotals['Транспортные расходы'] || 0;
+  const pred = manualTotals['Представительские расходы'] || 0;
+
+  let S = 0;
+  let details = '';
+
+  if (contractType === 'СКС ПЛЮС') {
+    // НДС = S/1.05*0.05, Налог = (S-НДС)*0.06, Накл = 0.03*S
+    // (S - E - Накл - НДС - Налог) / S = 0.238
+    const E = adm + mat + sub + zpSam + zpTotal + tr + komTotal + pred;
+    const coeff = 1 - 0.03 - 5/105 - (100/105)*0.06 - 0.238;
+    S = E / coeff;
+    details = `Расходы: ${fmt(E)} | Коэфф: ${coeff.toFixed(4)}`;
+  }
+  else if (contractType === 'СИР') {
+    // НДС = S*22/122, Налог = (S - E - 0.03S - НДС)*0.25
+    // Net profit = 0.75*(S*(1-0.03-22/122) - E) = 0.238*S
+    const E = adm + mat + sub + zpSam + zpTotal + tr + komTotal + pred;
+    const k1 = 1 - 0.03 - 22/122;
+    const coeff = k1 - 0.238/0.75;
+    S = E / coeff;
+    details = `Расходы: ${fmt(E)} | Коэфф: ${coeff.toFixed(4)}`;
+  }
+  else if (contractType === 'СИР материалы') {
+    // НДС = (S - Мат - Тр)/1.22*0.22, Налог = 0
+    // (S - E_sirmat - 0.03S - НДС) / S = 0.10
+    // E_sirmat = без Адм расходов
+    const E_sirmat = mat + sub + zpSam + zpTotal + tr + komTotal + pred;
+    const nds_offset = (mat + tr) * 22/122;
+    const coeff = 1 - 0.03 - 22/122 - 0.10;
+    S = (E_sirmat - nds_offset) / coeff;
+    details = `Расходы (без Адм): ${fmt(E_sirmat)}`;
+  }
+  else if (contractType === 'СКС ПЛЮС 23.8+10') {
+    // Part 1: всё кроме материалов, рентабельность 23.8% как СКС ПЛЮС
+    const E_nomat = adm + sub + zpSam + zpTotal + tr + komTotal + pred;
+    const coeff1 = 1 - 0.03 - 5/105 - (100/105)*0.06 - 0.238;
+    const S1 = E_nomat / coeff1;
+    // Part 2: только материалы, рентабельность 10%
+    const S2 = mat / 0.90;
+    S = S1 + S2;
+    details = `Услуги: ${fmt(S1)} (${fmt(E_nomat)}) + Материалы: ${fmt(S2)} (${fmt(mat)})`;
+  }
+
+  S = Math.ceil(S * 100) / 100; // Round up to cents
+  const display = document.getElementById('min-contract-display');
+  display.textContent = fmt(S);
+  display.dataset.value = S;
+  display.title = details;
+
+  showPlanMsg(`${contractType}: МИН сумма = ${fmt(S)}. ${details}`, true);
+}
+
+function showPlanMsg(text, ok) {
+  const el = document.getElementById('plan-msg');
+  el.textContent = text;
+  el.className = 'plan-msg ' + (ok ? 'ok' : 'err');
+  el.style.display = 'block';
+  if (ok) setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
 
 const saved = localStorage.getItem('st_token');
 if (saved) { state.token = saved; document.getElementById('setup').style.display = 'none'; init(); }
