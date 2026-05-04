@@ -111,7 +111,11 @@
 <div id="app">
   <div class="toolbar">
     <div class="toolbar-title">Дашборд Владельцев</div>
-    <div class="toolbar-actions">
+    <div class="toolbar-actions" style="display:flex;align-items:center;gap:10px;">
+      <label style="color:rgba(255,255,255,0.7);font-size:13px;">Год:</label>
+      <select id="year-select" onchange="onYearChange()" style="padding:7px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:#fff;color:#1a1a1a;font-size:13px;cursor:pointer;">
+        <option value="">Все</option>
+      </select>
       <button onclick="init()">Обновить данные</button>
       <button onclick="clearToken()">Сменить токен</button>
     </div>
@@ -264,11 +268,45 @@
 <script>
 // =====================================================================
 const TARGET_RPS = [
-  'Пестич Иван', 'Васин Андрей', 'Овчаров Александр', 'Ульянов Александр', 'Панченко Александр'
+  'Васин Андрей', 'Воскресенский Виктор', 'Королев Алексей', 'Овчаров Александр',
+  'Панченко Александр', 'Пестич Иван', 'Ульянов Александр', 'Хахаев Сергей'
 ];
 // =====================================================================
 
 const BASE_URL = 'https://cloud.seatable.io';
+
+function getProjectYear(row) {
+  return String(row['Год проекта'] || '').trim();
+}
+
+function matchesYear(row) {
+  if (!state.selectedYear) return true;
+  return getProjectYear(row) === state.selectedYear;
+}
+
+function buildYearSelector() {
+  const years = new Set();
+  (state.rows.projects || []).forEach(r => {
+    const y = getProjectYear(r);
+    if (y) years.add(y);
+  });
+  const sorted = [...years].sort().reverse();
+  const sel = document.getElementById('year-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Все</option>' + sorted.map(y => '<option value="' + y + '">' + y + '</option>').join('');
+  const curYear = String(new Date().getFullYear());
+  if (years.has(curYear)) {
+    sel.value = curYear;
+    state.selectedYear = curYear;
+  }
+}
+
+function onYearChange() {
+  state.selectedYear = document.getElementById('year-select').value;
+  renderRpMatrix();
+  buildProjectSelector();
+}
+
 const CONTRACT_DICT = { '559093': 'СКС ПЛЮС', '878735': 'СКС ПЛЮС', '862575': 'СИР', '145864': 'СИР Материалы' };
 
 const ARTICLES = [
@@ -282,11 +320,12 @@ const ARTICLES = [
   { name: 'Командировочные',        planCol: 'Командировочные расходы',     ddsStat: ['09 Командировочные расходы'],           tabField: 'суточные' },
   { name: 'Накладные расходы',      planCol: 'Накладные расходы',           ddsStat: ['10 Накладные расходы'] },
   { name: 'Представительские',      planCol: 'Прочие',                      ddsStat: ['12 Представительские расходы'] },
+  { name: 'Налог на зарплату',      planCol: 'Налоги на ЗП',                isCalc: 'zp_tax' },
   { name: 'НДС',                    planCol: 'НДС',                         isCalc: 'nds' }, 
   { name: 'Налог на прибыль / УСН', planCol: 'Налог на Прибыль / УСН',     isCalc: 'tax' }
 ];
 
-let state = { token: null, accessToken: null, dtableUuid: null, apiGateway: null, rows: {}, colMaps: {}, colOptionsMap: {}, bankLinkId: null, bankTableId: null, bankOtherTableId: null, tableIdMap: {} };
+let state = { selectedYear: '', token: null, accessToken: null, dtableUuid: null, apiGateway: null, rows: {}, colMaps: {}, colOptionsMap: {}, bankLinkId: null, bankTableId: null, bankOtherTableId: null, tableIdMap: {} };
 let bankRowIds = {}; 
 
 function parseNum(val) {
@@ -341,6 +380,7 @@ async function init() {
     document.getElementById('setup').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     
+    buildYearSelector();
     renderKassa();
     renderRpMatrix();
     buildProjectSelector();
@@ -487,20 +527,38 @@ function getProjCode(r) {
   return c;
 }
 
-function getContractInfo(budget) {
-  if (!budget || Object.keys(budget).length === 0) return { code: 'NONE', displayName: 'НЕ УКАЗАН' };
-  const rawJson = budget._raw_json || JSON.stringify(budget);
-  for (const [id, name] of Object.entries(CONTRACT_DICT)) {
-    if (rawJson.includes(`"${id}"`)) return { code: (id === '145864' ? 'SIR_MAT' : (id === '862575' ? 'SIR' : 'SKS')), displayName: name };
+function parseContractType(textVal) {
+  let t = String(textVal || '').toUpperCase().replace(/\s+/g, '').replace(/C/g, 'С').replace(/K/g, 'К').replace(/P/g, 'Р').replace(/A/g, 'А');
+  if (!t) return null;
+  if (t.includes('СИРМАТ') || t.includes('SIR_MAT') || t.includes('СИРМАТЕРИАЛ')) return { code: 'SIR_MAT', displayName: 'СИР Материалы' };
+  if (t.includes('СИР') || t.includes('SIR')) return { code: 'SIR', displayName: 'СИР' };
+  if (t.includes('23.8') || t.includes('23,8') || t.includes('238')) return { code: 'SKS238', displayName: 'СКС ПЛЮС 23.8+10' };
+  if (t.includes('СКС') || t.includes('SKS')) return { code: 'SKS', displayName: 'СКС ПЛЮС' };
+  return null;
+}
+
+function getContractInfo(budget, projRecord) {
+  // Try budget raw_json IDs
+  if (budget && Object.keys(budget).length > 0) {
+    const rawJson = budget._raw_json || JSON.stringify(budget);
+    for (const [id, name] of Object.entries(CONTRACT_DICT)) {
+      if (rawJson.includes(`"${id}"`)) return { code: (id === '145864' ? 'SIR_MAT' : (id === '862575' ? 'SIR' : 'SKS')), displayName: name };
+    }
+    // Try budget Тип договора text
+    const res = parseContractType(budget['Тип договора']);
+    if (res) return res;
   }
-  let textVal = String(budget['Тип договора'] || '').toUpperCase().replace(/\s+/g, '').replace(/C/g, 'С').replace(/K/g, 'К').replace(/P/g, 'Р').replace(/A/g, 'А');
-  if (textVal.includes('СИРМАТ') || textVal.includes('SIR_MAT')) return { code: 'SIR_MAT', displayName: 'СИР Материалы' };
-  if (textVal.includes('СИР') || textVal.includes('SIR')) return { code: 'SIR', displayName: 'СИР' };
-  return { code: 'SKS', displayName: 'СКС ПЛЮС' };
+  // Fallback to project Тип договора
+  if (projRecord) {
+    const res = parseContractType(projRecord['Тип договора']);
+    if (res) return res;
+  }
+  if (!budget || Object.keys(budget).length === 0) return { code: 'NONE', displayName: 'НЕ УКАЗАН' };
+  return { code: 'NONE', displayName: 'НЕ УКАЗАН' };
 }
 
 function getFinancialsForProject(budget, projRecord) {
-  const contractInfo = getContractInfo(budget);
+  const contractInfo = getContractInfo(budget, projRecord);
   const cType = contractInfo.code;
   
   // Use both budget and project data for matching
@@ -528,11 +586,13 @@ function getFinancialsForProject(budget, projRecord) {
     const rows = state.rows.dds.filter(r => {
       if (!matchProject(String(r['Код проекта'] || r['Проект'] || ''))) return false;
       const rowStat = String(r['Статья бюджета'] || '').toLowerCase().trim();
-      const statMatch = searchStats.some(s => rowStat === s || rowStat.includes(s));
-      if (isIncome) return statMatch;
-      return statMatch;
+      return searchStats.some(s => rowStat === s || rowStat.includes(s));
     });
-    return { total: rows.reduce((s, r) => s + parseNum(r['Сумма']), 0), rows };
+    // Sign convention: negative = income (приход), positive = expense (расход)
+    if (isIncome) {
+      return { total: Math.abs(rows.filter(r => parseNum(r['Сумма']) < 0).reduce((s, r) => s + parseNum(r['Сумма']), 0)), rows };
+    }
+    return { total: rows.filter(r => parseNum(r['Сумма']) > 0).reduce((s, r) => s + parseNum(r['Сумма']), 0), rows };
   }
   
   function getTabelForField(field) {
@@ -553,7 +613,17 @@ function getFinancialsForProject(budget, projRecord) {
       const matFact = Math.abs(getDdsForStat(['03 Материалы']).total);
       const transFact = Math.abs(getDdsForStat(['08 Транспортные расходы']).total);
 
-      if (art.isCalc === 'nds') {
+      const zpFact = (() => {
+        const zpArt = ARTICLES.find(a => a.name === 'ЗП монтажников');
+        if (!zpArt) return 0;
+        let t = 0;
+        if (zpArt.tabField) t += getTabelForField(zpArt.tabField).total;
+        if (zpArt.ddsStat) t += getDdsForStat(zpArt.ddsStat).total;
+        return t;
+      })();
+      if (art.isCalc === 'zp_tax') {
+        factTotal = zpFact * 0.5;
+      } else if (art.isCalc === 'nds') {
         if (cType === 'SIR_MAT') factTotal = Math.max(0, prihodFact - matFact - transFact) / 1.22 * 0.22;
         else if (cType === 'SIR') factTotal = prihodFact / 1.22 * 0.22;
         else factTotal = prihodFact / 1.05 * 0.05;
@@ -571,7 +641,7 @@ function getFinancialsForProject(budget, projRecord) {
             if (a.tabField) t += getTabelForField(a.tabField).total;
             return sum + t;
           }, 0);
-          factTotal = (prihodFact - allExp) * 0.25;
+          factTotal = Math.max(0, (prihodFact - allExp - zpFact * 0.5 - nds) * 0.25);
         }
       }
       factTotal = Math.max(0, factTotal);
@@ -601,9 +671,20 @@ function renderRpMatrix() {
   
   let unifiedProjects = [];
   state.rows.projects.forEach(p => {
+     if (!matchesYear(p)) return;
      const name = getProjName(p);
      const code = getProjCode(p);
      unifiedProjects.push({ proj: p, budget: state.rows.budgets.find(b => getProjName(b) === name) || {}, name, code });
+  });
+  // Also add budget-only rows that match year
+  state.rows.budgets.forEach(b => {
+     const name = getProjName(b);
+     const code = getProjCode(b);
+     if (code.toUpperCase() === 'RFI') return;
+     const matchProj = state.rows.projects.find(p => getProjName(p) === name);
+     if (matchProj) return; // already added via projects loop
+     if (state.selectedYear && matchProj && !matchesYear(matchProj)) return;
+     unifiedProjects.push({ proj: null, budget: b, name, code });
   });
 
   let matrixData = {};
@@ -618,7 +699,11 @@ function renderRpMatrix() {
      const rpVal = String(b['Ответственный'] || p['Ответственный'] || p['Руководитель проекта'] || p['РП'] || '').trim();
      
      let matchedRp = null;
-     for (let rp of TARGET_RPS) { if (rpVal.includes(rp) || rpVal === rp) { matchedRp = rp; break; } }
+     for (let rp of TARGET_RPS) {
+       // Check full name or last name only
+       const lastName = rp.split(' ')[0];
+       if (rpVal === rp || rpVal.includes(rp) || rpVal.includes(lastName)) { matchedRp = rp; break; }
+     }
      if (!matchedRp) return;
 
      let status = String(b['Статус'] || b['Status'] || p['Статус'] || p['Status'] || '').toLowerCase();
