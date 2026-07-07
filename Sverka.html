@@ -96,6 +96,13 @@
             <select id="employeeSelect" onchange="loadEmployeeData()" style="width: auto;">
                 <option value="">-- Сотрудник --</option>
             </select>
+            <label>Год:</label>
+            <select id="yearSelect" onchange="loadEmployeeData()" style="width: auto;">
+                <option value="">-- Все --</option>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026" selected>2026</option>
+            </select>
             <button class="export-btn" onclick="exportToExcel()">📥 Экспорт Excel</button>
         </div>
 
@@ -398,8 +405,12 @@
                 state.rows.payroll = await fetchAllRows('Табель и начисления');
                 state.rows.dds = await fetchAllRows('ДДС');
 
+                const yearSelect = document.getElementById('yearSelect');
+                const selectedYear = yearSelect.value;
+
                 let filteredTransfered = state.rows.transferred.filter(row => 
-                    getEmployeeName(row['Сотрудник']) === fio
+                    getEmployeeName(row['Сотрудник']) === fio &&
+                    (!selectedYear || getMonthKey(row['Дата'])?.startsWith(selectedYear))
                 );
 
                 // Filter payment types based on office/project
@@ -412,10 +423,12 @@
                 );
 
                 const filteredPayroll = state.rows.payroll.filter(row => 
-                    getEmployeeName(row['Сотрудник']) === fio
+                    getEmployeeName(row['Сотрудник']) === fio &&
+                    (!selectedYear || getMonthKey(row['Начало'])?.startsWith(selectedYear))
                 );
                 const filteredDDS = state.rows.dds.filter(row => 
-                    getEmployeeName(row['Оплата']) === fio
+                    getEmployeeName(row['Оплата']) === fio &&
+                    (!selectedYear || getMonthKey(row['Дата'])?.startsWith(selectedYear))
                 );
 
                 state.lastFiltered = { transferred: filteredTransfered, payroll: filteredPayroll, dds: filteredDDS };
