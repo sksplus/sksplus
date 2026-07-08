@@ -408,9 +408,27 @@
                 const yearSelect = document.getElementById('yearSelect');
                 const selectedYear = yearSelect.value;
 
-                let filteredTransfered = state.rows.transferred.filter(row => 
-                    getEmployeeName(row['Сотрудник']) === fio &&
-                    (!selectedYear || getMonthKey(row['Дата'])?.startsWith(selectedYear))
+                // Все данные сотрудника
+                const allTransferred = state.rows.transferred.filter(row => getEmployeeName(row['Сотрудник']) === fio);
+                const allPayroll = state.rows.payroll.filter(row => getEmployeeName(row['Сотрудник']) === fio);
+                const allDDS = state.rows.dds.filter(row => getEmployeeName(row['Оплата']) === fio);
+
+                // Считаем остаток до начала выбранного года
+                let initialCarryover = 0;
+                if (selectedYear) {
+                    const prevT = allTransferred.filter(r => (getMonthKey(r['Дата']) || '').slice(0,4) < selectedYear);
+                    const prevP = allPayroll.filter(r => (getMonthKey(r['Начало']) || '').slice(0,4) < selectedYear);
+                    const prevD = allDDS.filter(r => (getMonthKey(r['Дата']) || '').slice(0,4) < selectedYear);
+                    // Применяем те же фильтры платежей
+                    const prevTFiltered = prevT.filter(row => !excludePayments.includes(String(row['Назначение платежа'])));
+                    const sumT = prevTFiltered.reduce((s,r) => s + getNumValue(r['Сумма']), 0);
+                    const sumP = prevP.reduce((s,r) => s + getNumValue(r['ИТОГО НАЧИСЛЕНО']), 0);
+                    const sumD = prevD.reduce((s,r) => s + getNumValue(r['Сумма']), 0);
+                    initialCarryover = sumT - sumP - sumD;
+                }
+
+                let filteredTransfered = allTransferred.filter(row =>
+                    !selectedYear || getMonthKey(row['Дата'])?.startsWith(selectedYear)
                 );
 
                 // Filter payment types based on office/project
@@ -422,13 +440,11 @@
                     !excludePayments.includes(String(row['Назначение платежа']))
                 );
 
-                const filteredPayroll = state.rows.payroll.filter(row => 
-                    getEmployeeName(row['Сотрудник']) === fio &&
-                    (!selectedYear || getMonthKey(row['Начало'])?.startsWith(selectedYear))
+                const filteredPayroll = allPayroll.filter(row =>
+                    !selectedYear || getMonthKey(row['Начало'])?.startsWith(selectedYear)
                 );
-                const filteredDDS = state.rows.dds.filter(row => 
-                    getEmployeeName(row['Оплата']) === fio &&
-                    (!selectedYear || getMonthKey(row['Дата'])?.startsWith(selectedYear))
+                const filteredDDS = allDDS.filter(row =>
+                    !selectedYear || getMonthKey(row['Дата'])?.startsWith(selectedYear)
                 );
 
                 state.lastFiltered = { transferred: filteredTransfered, payroll: filteredPayroll, dds: filteredDDS };
@@ -437,7 +453,7 @@
                 state.payrollTotal = renderPayrollTable(filteredPayroll);
                 state.ddsTotal = renderDDSTable(filteredDDS);
 
-                renderSverka(filteredTransfered, filteredPayroll, filteredDDS);
+                renderSverka(filteredTransfered, filteredPayroll, filteredDDS, initialCarryover);
                 document.getElementById('tabButtons').style.display = 'flex';
                 document.getElementById('summary').style.display = 'block';
 
@@ -580,7 +596,7 @@
             return `${months[parseInt(m)-1]} ${y}`;
         }
 
-        function renderSverka(transferred, payroll, dds) {
+        function renderSverka(transferred, payroll, dds, initialCarryover = 0) {
             const container = document.getElementById('sverkaSection');
 
             // Collect all months
@@ -593,7 +609,7 @@
             if (months.length === 0) { container.style.display = 'none'; return; }
 
             let html = '';
-            let carryover = 0; // rolling balance
+            let carryover = initialCarryover;
 
             months.forEach((mk, idx) => {
                 const label = monthLabel(mk);
