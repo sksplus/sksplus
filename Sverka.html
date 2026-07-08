@@ -413,13 +413,17 @@
                 const allPayroll = state.rows.payroll.filter(row => getEmployeeName(row['Сотрудник']) === fio);
                 const allDDS = state.rows.dds.filter(row => getEmployeeName(row['Оплата']) === fio);
 
+                // Filter payment types based on office/project
+                const excludePayments = officeType === 'О' 
+                    ? ['120118', '773433', '252877']
+                    : ['120118'];
+
                 // Считаем остаток до начала выбранного года
                 let initialCarryover = 0;
                 if (selectedYear) {
                     const prevT = allTransferred.filter(r => (getMonthKey(r['Дата']) || '').slice(0,4) < selectedYear);
                     const prevP = allPayroll.filter(r => (getMonthKey(r['Начало']) || '').slice(0,4) < selectedYear);
                     const prevD = allDDS.filter(r => (getMonthKey(r['Дата']) || '').slice(0,4) < selectedYear);
-                    // Применяем те же фильтры платежей
                     const prevTFiltered = prevT.filter(row => !excludePayments.includes(String(row['Назначение платежа'])));
                     const sumT = prevTFiltered.reduce((s,r) => s + getNumValue(r['Сумма']), 0);
                     const sumP = prevP.reduce((s,r) => s + getNumValue(r['ИТОГО НАЧИСЛЕНО']), 0);
@@ -431,11 +435,6 @@
                     !selectedYear || getMonthKey(row['Дата'])?.startsWith(selectedYear)
                 );
 
-                // Filter payment types based on office/project
-                const excludePayments = officeType === 'О' 
-                    ? ['120118', '773433', '252877'] // Отпускные, Зарплата, Аванс
-                    : ['120118']; // Отпускные
-                
                 filteredTransfered = filteredTransfered.filter(row => 
                     !excludePayments.includes(String(row['Назначение платежа']))
                 );
