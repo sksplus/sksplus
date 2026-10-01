@@ -182,7 +182,7 @@
     </script>
     <script>
         const BASE_URL = 'https://cloud.seatable.io';
-        
+
         let state = {
             token: null,
             accessToken: null,
@@ -224,6 +224,15 @@
                 return getNumValue(val.value);
             }
             return 0;
+        }
+
+        // Фикс-значение, если заполнено; иначе — базовое поле (формула)
+        function pickRate(row, fixKey, baseKey) {
+            const fix = getNumValue(row[fixKey]);
+            if (fix) return Math.round(fix * 100) / 100;
+            let base = row[baseKey];
+            if (Array.isArray(base)) base = base.length > 0 ? base[0] : 0;
+            return Math.round(getNumValue(base) * 100) / 100;
         }
 
         function getEmployeeName(field) {
@@ -294,7 +303,7 @@
             try {
                 let allRows = [];
                 let start = 0;
-                
+
                 while (true) {
                     const r = await makeRequest(`/rows/?table_name=${encodeURIComponent(tableName)}&start=${start}&limit=1000`);
                     const rows = (r.rows || []).map(row => {
@@ -309,12 +318,12 @@
                         }
                         return processedRow;
                     });
-                    
+
                     allRows = allRows.concat(rows);
                     if (!r.rows || r.rows.length < 1000) break;
                     start += 1000;
                 }
-                
+
                 return allRows;
             } catch (e) {
                 console.warn(`Ошибка при загрузке ${tableName}:`, e);
@@ -339,7 +348,7 @@
                             }
                         }
                     }
-                    
+
                     if (fio) {
                         employees.push({ fio, row });
                     }
@@ -378,7 +387,7 @@
             try {
                 const select = document.getElementById('employeeSelect');
                 const option = select.options[select.selectedIndex];
-                
+
                 if (!option.value) {
                     document.getElementById('transferedSection').style.display = 'none';
                     document.getElementById('payrollSection').style.display = 'none';
@@ -394,7 +403,7 @@
                     let efio = e['ФИО'] || e['Имя'] || e['Name'];
                     return efio === fio;
                 });
-                
+
                 let officeTypeId = employee?.['Офис/проект'];
                 if (Array.isArray(officeTypeId) && officeTypeId.length > 0) {
                     officeTypeId = officeTypeId[0]?.display_value || officeTypeId[0]?.row_id || officeTypeId[0];
@@ -414,7 +423,7 @@
                 const allDDS = state.rows.dds.filter(row => getEmployeeName(row['Оплата']) === fio);
 
                 // Filter payment types based on office/project
-                const excludePayments = officeType === 'О' 
+                const excludePayments = officeType === 'О'
                     ? ['120118', '773433', '252877']
                     : ['120118'];
 
@@ -435,7 +444,7 @@
                     !selectedYear || getMonthKey(row['Дата'])?.startsWith(selectedYear)
                 );
 
-                filteredTransfered = filteredTransfered.filter(row => 
+                filteredTransfered = filteredTransfered.filter(row =>
                     !excludePayments.includes(String(row['Назначение платежа']))
                 );
 
@@ -500,12 +509,7 @@
             let total = 0;
 
             rows.forEach(row => {
-                let суточныеVal = row['Фикс суточные'];
-                if (!суточныеVal || суточныеVal === 0 || суточныеVal === '') {
-                    let arr = row['Суточные'];
-                    суточныеVal = Array.isArray(arr) && arr.length > 0 ? arr[0] : arr;
-                }
-                суточныеVal = Math.round(getNumValue(суточныеVal));
+                const суточныеVal = Math.round(pickRate(row, 'Фикс суточные', 'Суточные'));
 
                 let projVal = row['Проект'];
                 if (Array.isArray(projVal) && projVal.length > 0) {
@@ -649,16 +653,16 @@
                 if (mPayroll.length > 0) {
                     html += `<tr><td colspan="3" class="sverka-section-label">📝 Заработано (табель)</td></tr>`;
                     mPayroll.forEach((r, idx) => {
-                        console.log(`[${formatDate(r['Начало'])}–${formatDate(r['Конец'])}] Статус:`, JSON.stringify(r['Статус']), '| Ставка:', r['Фикс ставка'], '| Бриг:', r['Фикс Бригадирские'], '| Суточные:', r['Фикс суточные'], '| ИТОГО НАЧИСЛЕНО:', r['ИТОГО НАЧИСЛЕНО'], '| Кол-во дней:', r['Кол-во дней']);
                         const days = getNumValue(r['Кол-во дней']);
                         const smena = getNumValue(r['Смена']) || 1;
-                        const stavka = getNumValue(r['Фикс ставка']);
-                        const daily = getNumValue(r['Фикс суточные']);
-                        const brigadirRate = getNumValue(r['Фикс Бригадирские']);
+                        const stavka = pickRate(r, 'Фикс ставка', 'Базовая ставка');
+                        const daily = pickRate(r, 'Фикс суточные', 'Суточные');
+                        const brigadirRate = pickRate(r, 'Фикс Бригадирские', 'Бригадирские');
                         const statusId = Array.isArray(r['Статус']) ? (r['Статус'][0]?.row_id || r['Статус'][0] || null) : (r['Статус'] || null);
                         const isKomandirovka = statusId === '267320';
                         const isBrigadir = statusId === '307423';
                         const dateRange = `${formatDate(r['Начало'])}–${formatDate(r['Конец'])}`;
+                        console.log(`[${dateRange}] Статус:`, JSON.stringify(r['Статус']), '| Ставка:', stavka, '| Бриг:', brigadirRate, '| Суточные:', daily, '| ИТОГО НАЧИСЛЕНО:', r['ИТОГО НАЧИСЛЕНО'], '| Кол-во дней:', days);
 
                         if (isKomandirovka) {
                             if (daily) html += `<tr class="sverka-payroll-sub"><td class="col-label">Суточные ${days} × ${daily}</td><td class="col-date">${dateRange}</td><td class="col-sum">${fmt(days * daily)}</td></tr>`;
@@ -752,9 +756,9 @@
                         mP.forEach(r => {
                             const days = getNumValue(r['Кол-во дней']);
                             const smena = getNumValue(r['Смена']) || 1;
-                            const stavka = getNumValue(r['Фикс ставка']);
-                            const daily = getNumValue(r['Фикс суточные']);
-                            const brigadirRate = getNumValue(r['Фикс Бригадирские']);
+                            const stavka = pickRate(r, 'Фикс ставка', 'Базовая ставка');
+                            const daily = pickRate(r, 'Фикс суточные', 'Суточные');
+                            const brigadirRate = pickRate(r, 'Фикс Бригадирские', 'Бригадирские');
                             const statusId = Array.isArray(r['Статус']) ? (r['Статус'][0]?.row_id || r['Статус'][0] || null) : (r['Статус'] || null);
                             const isKomandirovka = statusId === '267320';
                             const isBrigadir = statusId === '307423';
